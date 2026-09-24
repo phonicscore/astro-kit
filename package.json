@@ -1,6 +1,6 @@
 {
   "name": "@phonicscore/astro-kit",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Shared Astro foundation for PhonicScore websites: one integration preset, the SEO head, content transforms, base styles and the contact-form Worker.",
   "type": "module",
   "private": true,
@@ -19,7 +19,8 @@
     "./lib/*": "./lib/*",
     "./components/*": "./components/*",
     "./styles/*": "./styles/*",
-    "./worker/*": "./worker/*"
+    "./worker/*": "./worker/*",
+    "./routes/*": "./routes/*"
   },
   "files": [
     "index.js",
@@ -27,6 +28,7 @@
     "lib",
     "components",
     "styles",
+    "routes",
     "worker",
     "README.md",
     "CHANGELOG.md"

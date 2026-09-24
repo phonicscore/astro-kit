@@ -9,6 +9,10 @@ export interface KitOptions {
   seo?: Record<string, unknown>;
   /** Extra rehype plugins, run after the kit's content transforms. */
   rehypePlugins?: unknown[];
+  /** Generate /robots.txt (default true; skipped if public/robots.txt exists). */
+  robots?: boolean;
+  /** Write baseline security + caching headers (default true; skipped if public/_headers exists). */
+  headers?: boolean;
 }
 
 /** The PhonicScore toolchain as one Astro integration. */

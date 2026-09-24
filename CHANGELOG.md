@@ -5,6 +5,21 @@ Versions are git tags, and follow semver: patch = fixes, minor = features
 own code. Sites depend on `#semver:^1.0.0`, so every patch and minor reaches
 them on `npm update` and no major ever does by surprise.
 
+## 1.1.0 — 2026-09-24
+
+Two things every site should have, now on by default. No site needs to change
+anything to receive them.
+
+- **robots.txt**, generated from the site's `site` URL and pointing at its
+  sitemap. Skipped when a site ships its own `public/robots.txt`; opt out with
+  `robots: false`.
+- **Baseline `_headers`**: nosniff, referrer policy, permissions policy, frame
+  options, HSTS, and immutable caching for hashed `/_astro/*` assets. Skipped
+  when a site ships its own `public/_headers` — merging would double headers
+  that Cloudflare then joins into invalid values. Opt out with `headers: false`.
+  The permissions policy allows the microphone for the site itself
+  (`microphone=(self)`): denying it would silently break listening demos.
+
 ## 1.0.0 — 2026-09-24
 
 Extracted from phonicscore.com, the first site on the stack (decision 9 of the
