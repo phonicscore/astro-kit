@@ -1,0 +1,86 @@
+/*
+ * @phonicscore/astro-kit — base styles. Import right after Tailwind:
+ *
+ *   @import 'tailwindcss';
+ *   @import '@phonicscore/astro-kit/styles/base.css';
+ *
+ * Structure only. Colors, type and radii come from the site's own @theme, so
+ * every site keeps its identity. Token contract the kit relies on:
+ *   --color-accent   focus rings
+ */
+
+/* Tailwind v4 skips node_modules when scanning for classes; without this the
+   utilities used inside the kit's components would never be generated. The
+   path resolves relative to this file, wherever npm puts the package. */
+@source '../components';
+
+@layer base {
+  :where(a, button, input, textarea, select, [tabindex]):focus-visible {
+    outline: 3px solid var(--color-accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+@layer components {
+  /* Mega-menu hover bridge. A flyout positioned against the header starts a
+     few pixels below the nav link, and it is pointer-events-none until the item
+     is hovered — so crossing that gap breaks the hover chain and closes the
+     menu. Put `relative fly-bridge` on the link inside a `group/fly` item: this
+     invisible strip carries the hover across, and only takes pointer events
+     while the menu is open. Plain CSS on purpose: Tailwind does not compose
+     `group-hover/name:after:` and drops it without a warning. */
+  .fly-bridge::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: -0.5rem;
+    right: -0.5rem;
+    height: 2rem;
+    pointer-events: none;
+  }
+  .group\/fly:hover .fly-bridge::after {
+    pointer-events: auto;
+  }
+
+  /* Layout of the structures lib/rehype-content.mjs derives from flattened
+     Markdown. Structure only — the site's CSS supplies colors and type. */
+  .prose .image-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: 2rem 2.5rem;
+    align-items: center;
+    margin: 2em 0;
+  }
+  .prose .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 1.5rem 1rem;
+    margin: 2em 0;
+    text-align: center;
+  }
+  .prose .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+    gap: 1.5rem;
+    margin: 2em 0;
+  }
+  .prose .process {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+    gap: 1.5rem;
+    margin: 2em 0;
+  }
+  .prose .media-split {
+    display: grid;
+    gap: 1.5rem;
+    align-items: center;
+    margin: 3em 0;
+  }
+  @media (min-width: 768px) {
+    .prose .media-split {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+      gap: 3rem;
+    }
+  }
+}

@@ -1,0 +1,46 @@
+---
+/**
+ * Visible breadcrumb trail for nested pages (pair it with the BreadcrumbList
+ * in the page's schema graph). Mono data voice by default; ancestors are links,
+ * the current page is plain text.
+ *
+ * Colors only use the text color it inherits plus --color-accent, so it works
+ * on any site's palette. Pass `classes` to match a site's own tokens exactly.
+ */
+interface Crumb {
+  name: string;
+  url: string;
+}
+interface Props {
+  crumbs: Crumb[];
+  classes?: { link?: string; current?: string; separator?: string };
+}
+const { crumbs, classes = {} } = Astro.props;
+const last = crumbs.length - 1;
+const link = classes.link ?? 'opacity-70 no-underline hover:opacity-100 hover:text-accent';
+const current = classes.current ?? '';
+const separator = classes.separator ?? 'opacity-40';
+---
+
+<nav aria-label="Breadcrumb" class="mb-8 font-mono text-[0.72rem] tracking-[0.02em]">
+  <ol class="m-0 flex list-none flex-wrap items-center gap-x-2.5 gap-y-1 p-0">
+    {
+      crumbs.map((c, i) =>
+        i === last ? (
+          <li aria-current="page" class={current}>
+            {c.name}
+          </li>
+        ) : (
+          <li class="flex items-center gap-x-2.5">
+            <a href={c.url} class={link}>
+              {c.name}
+            </a>
+            <span aria-hidden="true" class={separator}>
+              /
+            </span>
+          </li>
+        )
+      )
+    }
+  </ol>
+</nav>

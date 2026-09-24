@@ -1,0 +1,23 @@
+---
+/**
+ * Usermaven in cookieless mode — no cookies, so no consent banner. Renders
+ * nothing unless this is the production build AND a key is set, so previews
+ * and local builds never report page views. Place it inside <head>.
+ */
+interface Props {
+  usermavenKey: string;
+  isProduction: boolean;
+}
+const { usermavenKey, isProduction } = Astro.props;
+const run = isProduction && usermavenKey !== '';
+---
+
+{
+  run && (
+    <script is:inline define:vars={{ key: usermavenKey }} type="text/javascript">
+      {`(function(){window.usermaven=window.usermaven||function(){(usermaven.q=usermaven.q||[]).push(arguments)};var s=document.createElement("script");s.type="text/javascript";s.async=!0;s.src="https://t.usermaven.com/lib.js";var f=document.getElementsByTagName("script")[0];f.parentNode.insertBefore(s,f);})();
+      usermaven("init",{key:key,tracking_host:"https://events.usermaven.com",autocapture:!0,cookie_less:!0});
+      usermaven("track","pageview");`}
+    </script>
+  )
+}

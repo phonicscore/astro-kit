@@ -1,0 +1,91 @@
+---
+/**
+ * Everything a page's <head> needs for search and sharing, in one place:
+ * favicons, <title> with the site suffix, description, canonical, hreflang
+ * pairs, Open Graph + Twitter cards, the schema.org graph and the sitemap link.
+ * Render it inside <head>; charset, viewport and font preloads stay with the
+ * site's layout because they differ per site.
+ *
+ * Favicons are expected at /favicon.svg, /favicon-32.png, /apple-touch-icon.png.
+ * og:image points at /og/<slug>.png — the card the site's /og/ route builds.
+ */
+import Seo from '@jdevalk/astro-seo-graph/Seo.astro';
+import { ogSlug } from '../lib/og.js';
+
+interface Alternate {
+  /** hreflang code, e.g. "en" or "de" */
+  hreflang: string;
+  /** Absolute or site-relative URL of that language's version */
+  href: string;
+}
+
+interface Props {
+  /** Page title (also the schema WebPage name), without the site-name suffix. */
+  title: string;
+  /** SEO <title> override; the visible h1 keeps `title`. */
+  seoTitle?: string;
+  description?: string;
+  siteName: string;
+  siteUrl: string;
+  /** Open Graph locale, e.g. "en_US". */
+  ogLocale: string;
+  /** The locale served at the root; becomes hreflang x-default. */
+  defaultLocale: string;
+  alternates: Alternate[];
+  /** schema.org JSON-LD graph (build it with @jdevalk/seo-graph-core). */
+  graph?: Record<string, unknown>;
+  noindex?: boolean;
+  /** Twitter/X handle for the summary card, e.g. "@phonicscore". */
+  twitterSite?: string;
+  /** false if the site does not generate /og/<slug>.png cards. */
+  ogImages?: boolean;
+}
+
+const {
+  title,
+  seoTitle,
+  description,
+  siteName,
+  siteUrl,
+  ogLocale,
+  defaultLocale,
+  alternates,
+  graph,
+  noindex = false,
+  twitterSite,
+  ogImages = true,
+} = Astro.props;
+
+const canonical = new URL(Astro.url.pathname, siteUrl).href;
+const ogImage = ogImages
+  ? new URL(`/og/${ogSlug(Astro.url.pathname)}.png`, siteUrl).href
+  : undefined;
+const seoAlternates = {
+  defaultLocale,
+  entries: alternates.map((a) => ({ hreflang: a.hreflang, href: new URL(a.href, siteUrl).href })),
+};
+---
+
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+<Seo
+  title={seoTitle ?? title}
+  titleTemplate={`%s - ${siteName}`}
+  description={description}
+  ogImage={ogImage}
+  ogImageAlt={seoTitle ?? title}
+  ogImageWidth={1200}
+  ogImageHeight={630}
+  canonical={canonical}
+  siteName={siteName}
+  locale={ogLocale}
+  twitter={twitterSite ? { card: 'summary_large_image', site: twitterSite } : undefined}
+  graph={graph}
+  alternates={seoAlternates}
+  noindex={noindex}
+  extraLinks={[
+    { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
+    { rel: 'sitemap', href: '/sitemap-index.xml' },
+  ]}
+/>

@@ -1,0 +1,11 @@
+---
+/**
+ * Wraps rendered Markdown so it picks up the `.prose` rules. The kit's content
+ * transforms (lib/rehype-content.mjs) turn flattened CMS exports back into
+ * image grids, stat rows, cards, media splits and process steps inside it.
+ */
+---
+
+<div class="prose">
+  <slot />
+</div>
