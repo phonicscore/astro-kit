@@ -5,6 +5,21 @@ Versions are git tags, and follow semver: patch = fixes, minor = features
 own code. Sites depend on `#semver:^1.0.0`, so every patch and minor reaches
 them on `npm update` and no major ever does by surprise.
 
+## 1.1.2 — 2026-09-30
+
+A fix every site should take before analytics goes live.
+
+- **Analytics never ran.** The Usermaven loader was written as `{`…`}` inside
+  `<script is:inline>`. Astro emits script content as raw text, so the browser
+  got a block holding an unused string: `window.usermaven` stayed undefined and
+  the library never loaded — in every build since the snippet was first written,
+  before the kit existed. The loader is now a plain string injected with
+  `set:html`, and the key goes in through `JSON.stringify` with `<` escaped.
+  Verified by executing the rendered script: the library is injected, and the
+  cookieless `init` and the `pageview` are queued; a key containing
+  `</script><script>` stays inert data. No data was lost — no site had a
+  Usermaven key set yet.
+
 ## 1.1.1 — 2026-09-30
 
 Documentation and repository hygiene only; no change to what sites build.

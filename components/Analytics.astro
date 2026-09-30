@@ -3,6 +3,11 @@
  * Usermaven in cookieless mode — no cookies, so no consent banner. Renders
  * nothing unless this is the production build AND a key is set, so previews
  * and local builds never report page views. Place it inside <head>.
+ *
+ * The loader is a plain string injected with set:html. Script content in Astro
+ * is raw text: an expression such as {`...`} written inside <script> is emitted
+ * literally, which leaves the browser a block holding an unused string. The key
+ * goes in through JSON.stringify with "<" escaped, so it can never close the tag.
  */
 interface Props {
   usermavenKey: string;
@@ -10,14 +15,14 @@ interface Props {
 }
 const { usermavenKey, isProduction } = Astro.props;
 const run = isProduction && usermavenKey !== '';
+const key = JSON.stringify(usermavenKey).replace(/</g, '\\u003c');
+const loader =
+  '(function(){window.usermaven=window.usermaven||function(){(usermaven.q=usermaven.q||[]).push(arguments)};' +
+  'var s=document.createElement("script");s.type="text/javascript";s.async=!0;' +
+  's.src="https://t.usermaven.com/lib.js";' +
+  'var f=document.getElementsByTagName("script")[0];f.parentNode.insertBefore(s,f);})();' +
+  `usermaven("init",{key:${key},tracking_host:"https://events.usermaven.com",autocapture:!0,cookie_less:!0});` +
+  'usermaven("track","pageview");';
 ---
 
-{
-  run && (
-    <script is:inline define:vars={{ key: usermavenKey }} type="text/javascript">
-      {`(function(){window.usermaven=window.usermaven||function(){(usermaven.q=usermaven.q||[]).push(arguments)};var s=document.createElement("script");s.type="text/javascript";s.async=!0;s.src="https://t.usermaven.com/lib.js";var f=document.getElementsByTagName("script")[0];f.parentNode.insertBefore(s,f);})();
-      usermaven("init",{key:key,tracking_host:"https://events.usermaven.com",autocapture:!0,cookie_less:!0});
-      usermaven("track","pageview");`}
-    </script>
-  )
-}
+{run && <script is:inline set:html={loader} />}
