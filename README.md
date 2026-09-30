@@ -4,7 +4,7 @@ The shared foundation under every PhonicScore website. A site depends on this
 package; when the kit changes, every site picks the change up on its next
 `npm update` — no copying, no merging.
 
-New site? Don't start here — start from
+New site? Don't start here — start from PhonicScore's internal template,
 [`phonicscore/astro-starter`](https://github.com/phonicscore/astro-starter), which is
 already wired to the kit.
 
@@ -83,7 +83,10 @@ as "0.1.x only", so a site would never receive 0.2.0.
 
 - **No site-specific values.** A URL, a brand color or a product name in here
   would ship to every site. Take it as an option instead.
-- **No Tailwind Plus code.** It is licensed per project and must not be
-  redistributed through a shared package — see the licence before borrowing.
+- **No Tailwind Plus code — ever.** This repository is public. The Tailwind Plus
+  licence covers using its components in our own projects, not redistributing
+  them — and a public package is redistribution. Components built from a
+  Tailwind Plus block live in the (private) site repos; the raw export stays on
+  the developer's machine and is gitignored here as a second line of defence.
 - **Keep the preset's defaults safe to receive unattended.** Anything that could
   change a site's output in a surprising way should be opt-in.

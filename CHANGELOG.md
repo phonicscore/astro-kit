@@ -5,6 +5,17 @@ Versions are git tags, and follow semver: patch = fixes, minor = features
 own code. Sites depend on `#semver:^1.0.0`, so every patch and minor reaches
 them on `npm update` and no major ever does by surprise.
 
+## 1.1.1 — 2026-09-30
+
+Documentation and repository hygiene only; no change to what sites build.
+
+- README: corrected the Tailwind Plus rule. The licence is per person or team
+  and covers any number of our own projects; what it forbids is redistributing
+  the components, which a public package would be. This repository is public,
+  so it must never contain Tailwind Plus code.
+- .gitignore: `.tailwindplus/` is excluded, so the licensed export cannot be
+  committed here by accident.
+
 ## 1.1.0 — 2026-09-24
 
 Two things every site should have, now on by default. No site needs to change
