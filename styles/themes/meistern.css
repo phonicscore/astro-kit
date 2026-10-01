@@ -1,0 +1,24 @@
+/*
+ * meistern.music: Navy. The stage comes from ../family.css; the curtain and the
+ * light are meistern's own. In the site's src/styles/global.css:
+ *
+ *   @import 'tailwindcss';
+ *   @import '@phonicscore/astro-kit/styles/base.css';
+ *   @import '@phonicscore/astro-kit/styles/themes/meistern.css';
+ */
+@import '../family.css';
+
+@theme {
+  --color-grad-a: #1f2f5e; /* curtain start: copy sits here (cream 10.7:1) */
+  --color-grad-b: #4875a4; /* curtain end: colour, not copy */
+  --color-accent: var(--color-meistern); /* the light: links, labels, marks, focus rings */
+  --color-accent-hover: #a0c5f7;
+  --color-on-accent: #0b1626; /* text on an accent-filled button */
+}
+
+@layer base {
+  html {
+    color: var(--color-chalk);
+    background: var(--color-night);
+  }
+}

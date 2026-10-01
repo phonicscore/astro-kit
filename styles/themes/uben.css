@@ -1,0 +1,81 @@
+/*
+ * uben.music: the UBEN Design System v2 (Vienna), colours and families
+ * unchanged. uben doesn't use the family stage; its green stands for it
+ * elsewhere as --color-uben in ../family.css. In the site's global.css:
+ *
+ *   @import 'tailwindcss';
+ *   @import '@phonicscore/astro-kit/styles/base.css';
+ *   @import '@phonicscore/astro-kit/styles/themes/uben.css';
+ *
+ * Paper is the primary theme. Put data-theme="night" on a hero section for
+ * the Vienna black. Type scale, spacing, patterns and components come from
+ * the Design System itself.
+ *
+ * Palette, type pairing and patterns adapt The Vienna Template by the Vienna
+ * Tourist Board in cooperation with the MAK – Museum of Applied Arts,
+ * published in the Figma Community. Keep this credit with the file.
+ */
+@theme {
+  --color-paper: #fffcf4; /* the ground */
+  --color-surface: #ffffff; /* cards, always outlined in rule */
+  --color-surface-raised: #f5f0e3; /* inputs, inset panels */
+  --color-score: #ffffff; /* sheet music, white in every theme */
+  --color-score-ink: #000000;
+  --color-rule: #e7e0d2; /* decorative hairlines */
+  --color-rule-strong: #8e8878; /* borders that carry meaning */
+  --color-ink: #000000; /* text, and the black block */
+  --color-ink-muted: #6e685c;
+  --color-brand: #6c7c59; /* Otto-Wagner green (RAL 6011); as text only at 24px+ */
+  --color-brand-text: #5c694c; /* green as small text */
+  --color-on-brand: #000000; /* never cream: 4.4:1 */
+  --color-accent: #b69e62; /* Klimt gold; decorative on paper */
+  --color-accent-deep: #927e4e;
+  --color-accent-text: #766740; /* gold as small text */
+  --color-on-accent: #000000;
+  --color-signal: #4745c3; /* Wieselthier blue: links and the focus ring */
+  --color-marker: #ff3aa1; /* the highlighter; never text, never a fill */
+  --color-marker-deep: #1d273c;
+  --color-affirm: var(--color-brand-text);
+  --color-negate: var(--color-ink-muted);
+  --color-link: var(--color-signal);
+
+  --font-display: 'Sorts Mill Goudy', 'Iowan Old Style', Georgia, serif;
+  --font-sans:
+    'Jost Variable', Jost, Futura, 'Century Gothic', system-ui, sans-serif;
+  --font-numeral: 'Tsukimi Rounded', 'Jost Variable', Jost, system-ui, sans-serif;
+}
+
+/* Night: the Vienna black. Aliases resolve where they are declared, so Night
+   declares them again; without that, links and check marks inside a Night
+   section keep their Paper colours. */
+[data-theme='night'] {
+  --color-paper: #000000;
+  --color-surface: #121211;
+  --color-surface-raised: #1e1d1a;
+  --color-rule: #34322c;
+  --color-rule-strong: #77705f;
+  --color-ink: #fffcf4;
+  --color-ink-muted: #a9a494;
+  --color-brand-text: #98a38b;
+  --color-accent-deep: #b69e62;
+  --color-accent-text: #b69e62;
+  --color-signal: #918fdb;
+  --color-marker-deep: #43527a;
+  --color-affirm: var(--color-brand-text);
+  --color-negate: var(--color-ink-muted);
+  --color-link: var(--color-signal);
+}
+
+@layer base {
+  html {
+    color: var(--color-ink);
+    background: var(--color-paper);
+  }
+  /* UBEN's focus ring is signal blue on square corners: the kit's default
+     takes --color-accent, and Klimt gold on cream is only 2.5:1. */
+  :where(a, button, input, textarea, select, [tabindex]):focus-visible {
+    outline: 2px solid var(--color-signal);
+    outline-offset: 2px;
+    border-radius: 0;
+  }
+}

@@ -1,0 +1,24 @@
+/*
+ * spielbar.music: Berry. The stage comes from ../family.css; the curtain and the
+ * light are spielbar's own. In the site's src/styles/global.css:
+ *
+ *   @import 'tailwindcss';
+ *   @import '@phonicscore/astro-kit/styles/base.css';
+ *   @import '@phonicscore/astro-kit/styles/themes/spielbar.css';
+ */
+@import '../family.css';
+
+@theme {
+  --color-grad-a: #5c2149; /* curtain start: copy sits here (cream 9.8:1) */
+  --color-grad-b: #a94f74; /* curtain end: colour, not copy */
+  --color-accent: var(--color-spielbar); /* the light: links, labels, marks, focus rings */
+  --color-accent-hover: #f1aace;
+  --color-on-accent: #210f19; /* text on an accent-filled button */
+}
+
+@layer base {
+  html {
+    color: var(--color-chalk);
+    background: var(--color-night);
+  }
+}

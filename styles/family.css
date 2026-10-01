@@ -1,0 +1,58 @@
+/*
+ * @phonicscore/astro-kit — the .music family palette: same stage, own curtain.
+ * Opt-in. Nothing here reaches a site that doesn't import it.
+ *
+ *   phonicscore.com   @import '@phonicscore/astro-kit/styles/family.css';
+ *   a product site    @import '@phonicscore/astro-kit/styles/themes/stimmt.css';
+ *
+ * Every family site keeps phonicscore.com's stage (the warm dark ground, the
+ * type and the token names), so a section built for one site works on the
+ * others. Each product brings its own curtain (grad-a → grad-b) and its own
+ * light (accent): see themes/. uben keeps its own Vienna system.
+ *
+ * The rules that keep it one family:
+ *   - gold (highlight) on the curtain; the product's light on the stage
+ *   - copy stays on the dark half of a curtain
+ *   - sheet music sits on white: score and score-ink
+ *   - a miss is red and a cross, never colour alone
+ *   - no product key enters the parent's red-to-gold arc (OKLCH hue 29–94)
+ */
+@theme {
+  /* The stage: phonicscore.com's Signal ff ground, the same on every site */
+  --color-night: #0e0d0b; /* page ground */
+  --color-panel: #161411; /* raised cards */
+  --color-panel-2: #1c1915; /* alt panel: the one band per page */
+  --color-edge: #2b2721; /* borders on dark */
+  --color-chalk: #f1ece1; /* primary text on dark */
+  --color-dim: #9c9485; /* secondary text on dark */
+  --color-cream: #ebebd3; /* text on the curtain */
+  --color-highlight: #f4d35e; /* gold: the call to action on every curtain */
+  --color-miss: #d9544a; /* a wrong note, always drawn as a cross */
+  --color-score: #ffffff; /* the sheet-music surface (OSMD output) */
+  --color-score-ink: #000000; /* notation on score */
+
+  --font-sans:
+    'Bricolage Grotesque Variable', ui-sans-serif, system-ui, -apple-system,
+    'Segoe UI', Roboto, sans-serif;
+  --font-mono:
+    'Fragment Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* The keys: each product's light on the stage. Use them wherever a site
+     names a sibling: phonicscore.com's family band, cross-links. */
+  --color-spielbar: #e49ac1; /* Berry */
+  --color-uben: #98a38b; /* UBEN's own green on dark, from its Design System */
+  --color-stimmt: #61c4c1; /* Petrol */
+  --color-meistern: #91b7ea; /* Navy */
+}
+
+@layer components {
+  /* The curtain: the hero (and closing) gradient. Same angle and stops on
+     every family site; the colours are the site's grad-a and grad-b. */
+  .bg-brand-gradient {
+    background-image: linear-gradient(
+      150deg,
+      var(--color-grad-a) 8%,
+      var(--color-grad-b) 96%
+    );
+  }
+}

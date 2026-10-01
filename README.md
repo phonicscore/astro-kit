@@ -20,10 +20,13 @@ already wired to the kit.
 | Content transforms | `…/lib/rehype-content.mjs` | rebuilds image grids, stat rows, cards, media splits and process steps from flat Markdown (applied by the preset) |
 | Helpers | `…/lib/og.js`, `…/lib/i18n.js` | OG-card slugs; UI-string translator and locale-from-path |
 | Contact Worker | `…/worker/contact.ts` + `schema.sql` | POST handler: honeypot, Turnstile, rate limit, D1 log, Resend delivery |
+| Family palette | `…/styles/family.css`, `…/styles/themes/<product>.css` | opt-in: the stage every .music site shares, the four product keys, and each product's curtain and light |
 
-Deliberately **not** in the kit: anything that carries a brand — headers,
-footers, page templates, design tokens, copy. Each site owns its look; the kit
-owns the plumbing.
+Deliberately **not** in the kit: headers, footers, page templates and copy.
+Each site owns its pages; the kit owns the plumbing. The one look that lives
+here is the .music family palette, because several sites share it: a change
+to it should reach phonicscore.com and the product site together. It reaches
+a site only through an explicit import.
 
 ## Using it
 
@@ -60,6 +63,40 @@ export default defineConfig({
 The preset reads `site` and `i18n` from your config, so the sitemap's language
 alternates need no extra setup.
 
+### A .music product site
+
+The family palette is "same stage, own curtain": every product keeps
+phonicscore.com's stage (the warm dark ground, Bricolage Grotesque and Fragment
+Mono, the same token names) and brings its own curtain (`grad-a` → `grad-b`)
+and its own light (`accent`). Gold (`highlight`) is the call to action on every
+curtain. One import gives a product site all of it:
+
+```css
+/* src/styles/global.css */
+@import 'tailwindcss';
+@import '@phonicscore/astro-kit/styles/base.css';
+@import '@phonicscore/astro-kit/styles/themes/stimmt.css'; /* or spielbar, meistern, uben */
+```
+
+| Theme | Curtain | Light |
+|---|---|---|
+| `spielbar` · Berry | `#5c2149` → `#a94f74` | `#e49ac1` |
+| `stimmt` · Petrol | `#15444d` → `#2b8482` | `#61c4c1` |
+| `meistern` · Navy | `#1f2f5e` → `#4875a4` | `#91b7ea` |
+| `uben` | its own Vienna system (Paper, and Night via `data-theme="night"`) | |
+
+In a site made from the starter, the theme replaces the starter's `@theme`
+block and the `color`/`background` lines of its `html` rule. The site still
+loads its fonts itself (Fontsource, as phonicscore.com does). phonicscore.com
+imports `styles/family.css` on its own: the stage and the four keys, which
+its family band uses as `text-spielbar`, `text-uben`, `text-stimmt` and
+`text-meistern`.
+
+The rules that keep it one family are at the top of `styles/family.css`.
+Every contrast pair was checked when the palette was set (2026-09-30): cream
+copy is 7:1 or better on the first quarter of each curtain, and each light is
+8.4:1 or better on `panel`.
+
 ## How changes reach the sites
 
 1. Change the kit, add a line to `CHANGELOG.md`, bump `version` in `package.json`.
@@ -81,8 +118,10 @@ as "0.1.x only", so a site would never receive 0.2.0.
 
 ## Rules for this repo
 
-- **No site-specific values.** A URL, a brand color or a product name in here
-  would ship to every site. Take it as an option instead.
+- **Nothing reaches a site unasked.** A URL, a brand colour or a product name
+  in the preset or `base.css` would ship to every site; take it as an option
+  instead. The family palette is the exception, and it only applies where a
+  site imports it.
 - **No Tailwind Plus code — ever.** This repository is public. The Tailwind Plus
   licence covers using its components in our own projects, not redistributing
   them — and a public package is redistribution. Components built from a

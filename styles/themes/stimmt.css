@@ -1,0 +1,24 @@
+/*
+ * stimmt.music: Petrol. The stage comes from ../family.css; the curtain and the
+ * light are stimmt's own. In the site's src/styles/global.css:
+ *
+ *   @import 'tailwindcss';
+ *   @import '@phonicscore/astro-kit/styles/base.css';
+ *   @import '@phonicscore/astro-kit/styles/themes/stimmt.css';
+ */
+@import '../family.css';
+
+@theme {
+  --color-grad-a: #15444d; /* curtain start: copy sits here (cream 8.8:1) */
+  --color-grad-b: #2b8482; /* curtain end: colour, not copy */
+  --color-accent: var(--color-stimmt); /* the light: links, labels, marks, focus rings */
+  --color-accent-hover: #76d2cf;
+  --color-on-accent: #001b1a; /* text on an accent-filled button */
+}
+
+@layer base {
+  html {
+    color: var(--color-chalk);
+    background: var(--color-night);
+  }
+}

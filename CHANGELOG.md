@@ -5,6 +5,31 @@ Versions are git tags, and follow semver: patch = fixes, minor = features
 own code. Sites depend on `#semver:^1.0.0`, so every patch and minor reaches
 them on `npm update` and no major ever does by surprise.
 
+## 1.2.0 — 2026-10-01
+
+The .music family palette: same stage, own curtain. Opt-in, so no site
+changes unless it imports a file.
+
+- **`styles/family.css`**: the stage every family site shares (phonicscore.com's
+  night, panel, panel-2, edge, chalk, dim, cream and gold, plus Bricolage
+  Grotesque and Fragment Mono), three new shared tokens (`miss`, `score`,
+  `score-ink`), the four product keys (`spielbar`, `uben`, `stimmt`,
+  `meistern`) and the curtain utility `.bg-brand-gradient`.
+- **`styles/themes/spielbar.css`, `stimmt.css`, `meistern.css`**: the stage plus
+  each product's curtain (`grad-a` → `grad-b`) and light (`accent`,
+  `accent-hover`, `on-accent`); one import per product site.
+- **`styles/themes/uben.css`**: the UBEN Design System v2 colours and families,
+  Paper and Night. Night redeclares the alias tokens (`link`, `affirm`,
+  `negate`), which would otherwise keep their Paper colours inside a Night
+  section; the focus ring is signal blue, because the kit's default takes
+  `--color-accent` and Klimt gold is 2.5:1 on cream.
+- README: the rule on brand values now reads "nothing reaches a site unasked";
+  the family palette is the one look kept here, as opt-in files.
+
+Verified: each theme built with Tailwind 4.3 from a local copy of the kit,
+then checked in Chrome (ground, curtain, light, gold, focus ring; UBEN's Night
+links, check marks and focus ring).
+
 ## 1.1.2 — 2026-09-30
 
 A fix every site should take before analytics goes live.
