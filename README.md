@@ -16,6 +16,7 @@ already wired to the kit.
 | `SeoHead` | `…/components/SeoHead.astro` | title, description, canonical, hreflang, Open Graph + Twitter cards, schema.org graph, favicons |
 | `Analytics` | `…/components/Analytics.astro` | Usermaven, cookieless (no banner), production-only |
 | `Breadcrumbs`, `Prose` | `…/components/*.astro` | visible breadcrumb trail; the wrapper for rendered Markdown |
+| `FromVienna` | `…/components/FromVienna.astro` | the "From Vienna with love" sign-off for the bottom of every page: `<FromVienna />` on dark grounds, `<FromVienna ink="original" />` on light ones |
 | Base styles | `…/styles/base.css` | focus rings, the flyout hover bridge, layout for the content transforms |
 | Content transforms | `…/lib/rehype-content.mjs` | rebuilds image grids, stat rows, cards, media splits and process steps from flat Markdown (applied by the preset) |
 | Helpers | `…/lib/og.js`, `…/lib/i18n.js` | OG-card slugs; UI-string translator and locale-from-path |

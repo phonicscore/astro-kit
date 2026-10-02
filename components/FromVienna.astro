@@ -1,0 +1,38 @@
+---
+/**
+ * "From Vienna with love": the sign-off at the bottom of every PhonicScore
+ * site, as on opensheetmusicdisplay.org. St. Stephen's Cathedral in a circle
+ * over the caption.
+ *
+ * Rebuilt from the 2021 artwork so it looks the same everywhere. The caption
+ * was live text in DIN Condensed, which only Apple devices have; elsewhere it
+ * fell back to a wide serif and was cut off after "VIENNA". It is now outlined
+ * at the original positions. The light shape that painted over the circle
+ * behind the cathedral is now a mask, so any ground shows through.
+ *
+ * Two inks, baked into the files like every mark on the stage:
+ *   dark ground   <FromVienna />                 dim (#9c9485)
+ *   light ground  <FromVienna ink="original" />  the original warm grey (#423e3b)
+ * Another ink is a find-and-replace of the one fill colour in the SVG.
+ */
+import { Image } from 'astro:assets';
+import dim from '../assets/from-vienna-with-love-dim.svg';
+import original from '../assets/from-vienna-with-love.svg';
+
+interface Props {
+  /** `dim` for dark grounds (default), `original` for light ones. */
+  ink?: 'dim' | 'original';
+  /** Rendered width in px; the height follows the artwork (100 × 83). */
+  width?: number;
+  class?: string;
+}
+
+const { ink = 'dim', width = 100, class: className } = Astro.props;
+---
+
+<Image
+  src={ink === 'original' ? original : dim}
+  alt="From Vienna with love"
+  width={width}
+  class={className}
+/>

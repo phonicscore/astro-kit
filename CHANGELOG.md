@@ -5,6 +5,21 @@ Versions are git tags, and follow semver: patch = fixes, minor = features
 own code. Sites depend on `#semver:^1.0.0`, so every patch and minor reaches
 them on `npm update` and no major ever does by surprise.
 
+## 1.3.0 — 2026-10-02
+
+The "From Vienna with love" sign-off, for the bottom of every PhonicScore page.
+
+- **`components/FromVienna.astro`** with `assets/from-vienna-with-love-dim.svg`
+  and `assets/from-vienna-with-love.svg`: St. Stephen's Cathedral in a circle
+  over the caption, rebuilt from the 2021 artwork on opensheetmusicdisplay.org.
+  The caption was live text in DIN Condensed, which only Apple devices have;
+  elsewhere it fell back to a wide serif and was cut off after "VIENNA". It is
+  now outlined at the original positions. The light shape that painted over
+  the circle behind the cathedral is now a mask, so the badge sits on any
+  ground. Two inks: dim for dark grounds (the default), the original warm grey
+  for light ones; 11 KB each, lazy-loaded through `astro:assets`.
+- Nothing changes for a site until it places the component.
+
 ## 1.2.0 — 2026-10-01
 
 The .music family palette: same stage, own curtain. Opt-in, so no site
