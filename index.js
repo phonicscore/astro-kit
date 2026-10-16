@@ -23,7 +23,8 @@ import rehypeContent from './lib/rehype-content.mjs';
  * @property {{ title: string, summary: string }} llms
  *   Header of the generated llms.txt (what the site is, for generative engines).
  * @property {(page: string) => boolean} [sitemapExclude]
- *   Return true to leave a page out of the sitemap (e.g. noindex utility pages).
+ *   Return true to leave a page out of the sitemap and llms.txt (e.g. noindex
+ *   utility pages). Receives the page's full URL.
  * @property {Record<string, unknown>} [seo]
  *   Overrides merged into the astro-seo-graph options.
  * @property {any[]} [rehypePlugins]
@@ -130,7 +131,14 @@ export default function phonicscore(options) {
                 title: options.llms.title,
                 siteUrl,
                 summary: options.llms.summary,
-                filter: (url) => !/\/404\/?$/.test(new URL(url).pathname),
+                // The 404 page, and every page the site keeps out of its
+                // sitemap. astro-seo-graph builds this URL from the file path,
+                // unencoded; `href` is the form the sitemap filter receives, so
+                // `exclude` sees a page the same way in both places.
+                filter: (url) => {
+                  const { pathname, href } = new URL(url);
+                  return !/\/404\/?$/.test(pathname) && !exclude(href);
+                },
               },
               ...options.seo,
             }),

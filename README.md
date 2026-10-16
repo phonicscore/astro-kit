@@ -45,6 +45,7 @@ export default defineConfig({
   integrations: [
     phonicscore({
       llms: { title: 'Example', summary: 'One sentence on what the site is.' },
+      // Out of the sitemap and llms.txt: the contact form's pages.
       sitemapExclude: (page) => page.includes('/message'),
     }),
   ],
@@ -64,6 +65,11 @@ export default defineConfig({
 
 The preset reads `site` and `i18n` from your config, so the sitemap's language
 alternates need no extra setup.
+
+`sitemapExclude` receives each page's full URL
+(`https://example.music/message/sent/`). A page it returns true for stays out
+of the sitemap and out of `llms.txt`: use it for noindex utility pages such as
+a form's "message sent" page. The 404 page is left out of both anyway.
 
 ### A .music product site
 

@@ -5,6 +5,33 @@ Versions are git tags, and follow semver: patch = fixes, minor = features
 own code. Sites depend on `#semver:^1.0.0`, so every patch and minor reaches
 them on `npm update` and no major ever does by surprise.
 
+## 1.5.1 — 2026-10-16
+
+llms.txt now leaves out the pages a site keeps out of its sitemap. Its filter
+dropped only the 404 page, so `sitemapExclude` stopped at the sitemap and
+noindex utility pages were still listed for generative engines: osmd-wp.com's
+/welcome/ (after the Freemius checkout) and /update-payment/ (failed-payment
+recovery).
+
+- **`index.js`**: the llms.txt filter drops the 404 page and every URL
+  `sitemapExclude` returns true for. It hands `sitemapExclude` the URL in the
+  form the sitemap filter gets (`new URL(…).href`, which percent-encodes a
+  path such as `/de/über/`), so one rule matches a page in both places.
+- README, `index.d.ts` and the JSDoc: `sitemapExclude` covers llms.txt too.
+
+What a site sees on update: llms.txt loses the pages its sitemap already
+leaves out. osmd-wp.com: /welcome/ and /update-payment/. phonicscore.com: the
+four contact-form pages (/message/, /message/sent/, /de/message/,
+/de/message/gesendet/). uben.music: nothing, because its own `seo.llmsTxt`
+replaces the kit's; with 1.5.1 its `sitemapExclude` alone drops the same
+pages, so that override can go. The starter: nothing, it has no /message pages.
+
+Verified: osmd-wp.com built with this version lists 6 pages in llms.txt
+instead of 8, without /welcome/ and /update-payment/: the same six as its
+sitemap. Sitemap and built files unchanged, `astro check` clean. On
+uben.music's 20 built pages, the kit's filter with its `sitemapExclude` keeps
+exactly the 16 its override keeps.
+
 ## 1.5.0 — 2026-10-16
 
 The sign-off now reads "From Vienna with music" (Thomas: "change the footer
