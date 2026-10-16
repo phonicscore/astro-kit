@@ -5,6 +5,21 @@ Versions are git tags, and follow semver: patch = fixes, minor = features
 own code. Sites depend on `#semver:^1.0.0`, so every patch and minor reaches
 them on `npm update` and no major ever does by surprise.
 
+## 1.5.0 — 2026-10-16
+
+The sign-off now reads "From Vienna with music" (Thomas: "change the footer
+claim from From Vienna with Love to FROM VIENNA WITH MUSIC … on all sites").
+
+- **`assets/from-vienna-with-music.svg`** and **`-dim.svg`** replace the
+  "with love" files. The cathedral is untouched. The caption is outlined again
+  from DIN Condensed Bold with the font's kerning; that setting reproduces
+  the old caption to within 0.005 units. "WITH MUSIC" is one letter longer, so
+  the line is set at 12.31 instead of 13 units to keep the old width, edges and
+  baseline. The artwork stays 100 × 83, so no site's layout moves.
+- **`components/FromVienna.astro`**: new files, alt text "From Vienna with
+  music". Every site that places `<FromVienna />` shows the new caption after
+  `npm update`.
+
 ## 1.4.0 — 2026-10-16
 
 Share cards for every site, on by default. Thomas: "move the card generator

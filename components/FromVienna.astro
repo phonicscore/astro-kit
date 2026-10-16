@@ -1,14 +1,17 @@
 ---
 /**
- * "From Vienna with love": the sign-off at the bottom of every PhonicScore
- * site, as on opensheetmusicdisplay.org. St. Stephen's Cathedral in a circle
- * over the caption.
+ * "From Vienna with music": the sign-off at the bottom of every PhonicScore
+ * site. St. Stephen's Cathedral in a circle over the caption.
  *
- * Rebuilt from the 2021 artwork so it looks the same everywhere. The caption
- * was live text in DIN Condensed, which only Apple devices have; elsewhere it
- * fell back to a wide serif and was cut off after "VIENNA". It is now outlined
- * at the original positions. The light shape that painted over the circle
- * behind the cathedral is now a mask, so any ground shows through.
+ * Rebuilt from the 2021 "From Vienna with love" artwork on
+ * opensheetmusicdisplay.org so it looks the same everywhere. That caption was
+ * live text in DIN Condensed, which only Apple devices have; elsewhere it fell
+ * back to a wide serif and was cut off after "VIENNA". The caption is outlined
+ * from DIN Condensed Bold with the font's kerning. The original was 13 units
+ * high on the 100-wide artwork; "WITH MUSIC" is one letter longer, so the line
+ * is set at 12.31 to keep the old width and baseline (Thomas, 2026-10-16). The
+ * light shape that painted over the circle behind the cathedral is a mask, so
+ * any ground shows through.
  *
  * Two inks, baked into the files like every mark on the stage:
  *   dark ground   <FromVienna />                 dim (#9c9485)
@@ -16,8 +19,8 @@
  * Another ink is a find-and-replace of the one fill colour in the SVG.
  */
 import { Image } from 'astro:assets';
-import dim from '../assets/from-vienna-with-love-dim.svg';
-import original from '../assets/from-vienna-with-love.svg';
+import dim from '../assets/from-vienna-with-music-dim.svg';
+import original from '../assets/from-vienna-with-music.svg';
 
 interface Props {
   /** `dim` for dark grounds (default), `original` for light ones. */
@@ -32,7 +35,7 @@ const { ink = 'dim', width = 100, class: className } = Astro.props;
 
 <Image
   src={ink === 'original' ? original : dim}
-  alt="From Vienna with love"
+  alt="From Vienna with music"
   width={width}
   class={className}
 />

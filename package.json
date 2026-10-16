@@ -1,6 +1,6 @@
 {
   "name": "@phonicscore/astro-kit",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "Shared Astro foundation for PhonicScore websites: one integration preset, the SEO head and share cards, content transforms, base styles and the contact-form Worker.",
   "type": "module",
   "private": true,
