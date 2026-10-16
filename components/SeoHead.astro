@@ -7,7 +7,9 @@
  * site's layout because they differ per site.
  *
  * Favicons are expected at /favicon.svg, /favicon-32.png, /apple-touch-icon.png.
- * og:image points at /og/<slug>.png — the card the site's /og/ route builds.
+ * og:image points at /og/<slug>.png — the share card the kit draws for this page
+ * after the build, with og:image:alt as its title (see `ogImages` in the kit's
+ * integration options).
  */
 import Seo from '@jdevalk/astro-seo-graph/Seo.astro';
 import { ogSlug } from '../lib/og.js';
@@ -37,7 +39,7 @@ interface Props {
   noindex?: boolean;
   /** Twitter/X handle for the summary card, e.g. "@phonicscore". */
   twitterSite?: string;
-  /** false if the site does not generate /og/<slug>.png cards. */
+  /** false to leave og:image out (e.g. when the kit's cards are switched off). */
   ogImages?: boolean;
 }
 

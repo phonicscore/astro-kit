@@ -5,6 +5,46 @@ Versions are git tags, and follow semver: patch = fixes, minor = features
 own code. Sites depend on `#semver:^1.0.0`, so every patch and minor reaches
 them on `npm update` and no major ever does by surprise.
 
+## 1.4.0 — 2026-10-16
+
+Share cards for every site, on by default. Thomas: "move the card generator
+into the kit … I even prefer to add it as default, so every site gets it".
+
+- **`lib/og-cards.js`**: after the build the kit reads every page, and where
+  `og:image` points at `/og/<slug>.png`, as `SeoHead`'s does, it writes that
+  card: 1200×630, drawn by astro-og-canvas (canvaskit, no browser), the title
+  from `og:image:alt` (the page title without the site-name suffix) and the
+  meta description below it. Ported from phonicscore.com's own route
+  (`src/pages/og/[...route].png.ts`): same renderer, same layout and sizes.
+  What changed is how pages are found: from the built HTML instead of a list
+  in each site, so collection entries and standalone `.astro` pages all get a
+  card with nothing to maintain, and no tag points at a missing file.
+  `astro dev` renders the same card on request.
+- **`ogImages` option** themes it: `background` (one colour or a gradient),
+  `accent` (bar along the bottom), `logo` (SVG rasterised by resvg-wasm, its
+  text set in the card fonts; or PNG/JPEG), `siteName`, `title` and `text`
+  (TTF/OTF; family and weight are read from the file), `padding`. With nothing
+  set: graphite, Inter (OFL, in `assets/fonts/`, latin subset), the name from
+  `llms.title`. `ogImages: false` switches the generator off.
+- A card the site ships itself (`public/og/…`, or its own route) is kept, so
+  phonicscore.com's route and the kit can't fight over a file.
+- New dependencies: astro-og-canvas, @resvg/resvg-wasm (WebAssembly, no native
+  binary, so the build is the same on macOS, Cloudflare and Alpine), entities.
+- What a site sees on update: cards for every page whose `og:image` points at
+  `/og/`. Sites made from the starter so far pass `ogImages={false}` to
+  `SeoHead`; they get no cards until they drop that prop, since no card is
+  drawn that no page points at.
+- README: the "Share cards" section; the rule "nothing reaches a site unasked"
+  now names this exception.
+
+Verified: phonicscore.com with its route removed and the kit drawing its cards:
+57 of 62 PNGs byte-identical to its own build; the other five (404 and the
+four contact-form pages) now carry those pages' own title and description,
+where the route had hand-written text. osmd-wp.com (7 pages), uben.music (20)
+and the starter (5): every page's og:image points at a 1200×630 PNG that
+exists, `astro check` clean. Cards from `astro dev` are byte-identical to the
+built ones.
+
 ## 1.3.0 — 2026-10-02
 
 The "From Vienna with love" sign-off, for the bottom of every PhonicScore page.

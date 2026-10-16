@@ -3,10 +3,11 @@
  * @phonicscore/astro-kit — the foundation every PhonicScore site builds on.
  *
  * One integration brings the whole toolchain: icons, the i18n-aware sitemap,
- * the SEO/GEO checks + llms.txt, Tailwind v4 and the content transforms. A site
- * lists only `phonicscore({...})` in astro.config.mjs. Adding an integration
- * HERE reaches every site on its next `npm update @phonicscore/astro-kit` —
- * that is the whole point of this package, so keep site-specific values out.
+ * the SEO/GEO checks + llms.txt, Tailwind v4, the content transforms and the
+ * share cards. A site lists only `phonicscore({...})` in astro.config.mjs.
+ * Adding an integration HERE reaches every site on its next
+ * `npm update @phonicscore/astro-kit` — that is the whole point of this
+ * package, so keep site-specific values out.
  */
 import { existsSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
@@ -34,6 +35,11 @@ import rehypeContent from './lib/rehype-content.mjs';
  * @property {boolean} [headers]
  *   Write the baseline security + caching `_headers`. Default true; skipped
  *   automatically when the site ships its own public/_headers.
+ * @property {false | import('./lib/og-cards.js').OgImagesOptions} [ogImages]
+ *   Share cards: a 1200×630 PNG at /og/<slug>.png for every page whose
+ *   og:image points there (SeoHead's does unless `ogImages={false}`). On by
+ *   default with a neutral look; theme it here, or pass false to switch the
+ *   generator off. A card the site ships itself (public/og/…) is kept.
  */
 
 /**
@@ -73,6 +79,23 @@ function sitemapLocales(locales) {
  * @returns {import('astro').AstroIntegration}
  */
 export default function phonicscore(options) {
+  /** @type {import('astro').AstroConfig | undefined} */
+  let astroConfig;
+  /** @type {ReturnType<typeof import('./lib/og-cards.js').createCards> | undefined} */
+  let cards;
+  // Loaded on first use, so canvaskit and resvg stay out of a build that has
+  // no cards to draw.
+  const ogCards = () =>
+    (cards ??= import('./lib/og-cards.js').then((m) => {
+      const config = /** @type {import('astro').AstroConfig} */ (astroConfig);
+      return m.createCards({
+        options: options.ogImages || {},
+        root: config.root,
+        cacheDir: config.cacheDir,
+        siteName: options.llms.title,
+      });
+    }));
+
   return {
     name: '@phonicscore/astro-kit',
     hooks: {
@@ -137,7 +160,19 @@ export default function phonicscore(options) {
         }
       },
 
+      'astro:config:done': ({ config }) => {
+        astroConfig = config;
+      },
+
+      'astro:server:setup': async ({ server, logger }) => {
+        if (options.ogImages === false) return;
+        const { devMiddleware } = await import('./lib/og-cards.js');
+        server.middlewares.use(devMiddleware({ server, cards: ogCards, logger }));
+      },
+
       'astro:build:done': async ({ dir, logger }) => {
+        if (options.ogImages !== false) await (await ogCards()).write(dir, logger);
+
         if (options.headers === false) return;
         const file = new URL('_headers', dir);
         // A site that ships its own _headers keeps full control of it: merging

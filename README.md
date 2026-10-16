@@ -13,6 +13,7 @@ already wired to the kit.
 | Part | Import | What it gives a site |
 |---|---|---|
 | Integration preset | `@phonicscore/astro-kit` | astro-icon, the i18n-aware sitemap, SEO/GEO build checks + `llms.txt`, Tailwind v4, the content transforms — one line in `astro.config.mjs` |
+| Share cards | `ogImages` option of the preset | a 1200×630 link-preview PNG for every page at `/og/<slug>.png`, themed per site; on by default |
 | `SeoHead` | `…/components/SeoHead.astro` | title, description, canonical, hreflang, Open Graph + Twitter cards, schema.org graph, favicons |
 | `Analytics` | `…/components/Analytics.astro` | Usermaven, cookieless (no banner), production-only |
 | `Breadcrumbs`, `Prose` | `…/components/*.astro` | visible breadcrumb trail; the wrapper for rendered Markdown |
@@ -98,6 +99,59 @@ Every contrast pair was checked when the palette was set (2026-09-30): cream
 copy is 7:1 or better on the first quarter of each curtain, and each light is
 8.4:1 or better on `panel`.
 
+## Share cards
+
+Every page gets a link-preview card: a 1200×630 PNG at `/og/<slug>.png`, which
+is where `SeoHead` points `og:image` (X falls back to it). The kit draws the
+cards after the build with [astro-og-canvas](https://github.com/delucis/astro-og-canvas)
+(canvaskit in WebAssembly, no browser). It reads every built page, and where
+`og:image` points at `/og/…png` it writes that file: the title from
+`og:image:alt` (SeoHead sets it to `seoTitle ?? title`, without the site-name
+suffix), the meta description below it. So new pages, collection entries and
+standalone `.astro` pages all get a card with nothing to list, and a card can
+never point at a missing file. A card the site ships itself (`public/og/…`, or
+its own route) is kept. In `astro dev` the same cards render on request.
+
+On by default (Thomas, 2026-10-16: "every site gets it"), in a neutral look —
+graphite, Inter, the site's name from `llms.title` — until the site themes it:
+
+```js
+phonicscore({
+  llms: { title: 'OSMD for WordPress', summary: '…' },
+  ogImages: {
+    background: ['#9b32b8', '#902cab', '#6a1b7f'],
+    logo: './src/assets/og-mark.svg',
+    siteName: { text: 'OSMD for WordPress', font: './src/assets/fonts/poppins-latin-700.ttf' },
+    title: { font: './src/assets/fonts/poppins-latin-700.ttf', color: '#ffffff' },
+    text: { font: './src/assets/fonts/inter-latin-400.ttf', color: '#f3e1f8' },
+  },
+}),
+```
+
+| Option | Default | |
+|---|---|---|
+| `background` | `['#1c1c1f', '#2c2c31']` | one hex colour, or several for a top-to-bottom gradient |
+| `accent` | none | hex colour of the 12px bar along the bottom edge |
+| `logo` | none | `'./path'` or `{ path, width, height }`. SVG is rasterised by resvg at the exact size it is drawn (96px high by default) and its text is set in the card fonts; PNG/JPEG at its own size or `width` |
+| `siteName` | `llms.title` when there is no logo | a string, `false`, or `{ text, font, color, size, weight, tracking }`. Next to a logo only when set; its size then defaults to half the logo's height. `tracking` is letter-spacing in em |
+| `title` | Inter Bold, 60px, line height 1.15 | `{ font, color, size, weight, lineHeight }` |
+| `text` | Inter Regular, 30px, line height 1.4 | the same |
+| `padding` | `70` | px around the content |
+
+- Colours left out follow the background: light text on a dark ground, dark
+  text on a light one.
+- **Fonts must be TTF or OTF**: canvaskit cannot read WOFF or WOFF2. Keep them
+  in `src/assets/fonts/` (build time only, never shipped). Fontsource ships web
+  fonts only; fontTools turns one into a TTF without changing it
+  (`pip install fonttools brotli`, then
+  `python3 -c "from fontTools.ttLib import TTFont as T; f=T('in.woff2'); f.flavor=None; f.save('out.ttf')"`).
+  The weight defaults to the file's own. A variable font draws its default
+  instance unless `weight` says otherwise: phonicscore.com names both weights,
+  because Bricolage Grotesque's default instance is ExtraBold.
+- `ogImages: false` switches the generator off. Pass `ogImages={false}` to
+  `SeoHead` as well, or the pages point at cards nobody draws. The reverse is
+  safe: a page whose `SeoHead` has `ogImages={false}` gets no card drawn.
+
 ## How changes reach the sites
 
 1. Change the kit, add a line to `CHANGELOG.md`, bump `version` in `package.json`.
@@ -122,7 +176,10 @@ as "0.1.x only", so a site would never receive 0.2.0.
 - **Nothing reaches a site unasked.** A URL, a brand colour or a product name
   in the preset or `base.css` would ship to every site; take it as an option
   instead. The family palette is the exception, and it only applies where a
-  site imports it.
+  site imports it. The share cards are the other exception, by Thomas's
+  decision (2026-10-16): the generator runs in every site unless it opts out,
+  in a neutral look until the site themes it. It only writes the cards a
+  page's `og:image` names, and never replaces a file the site ships.
 - **No Tailwind Plus code — ever.** This repository is public. The Tailwind Plus
   licence covers using its components in our own projects, not redistributing
   them — and a public package is redistribution. Components built from a
