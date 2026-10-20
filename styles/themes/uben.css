@@ -27,7 +27,8 @@
   --color-ink-muted: #6e685c;
   --color-brand: #6c7c59; /* Otto-Wagner green (RAL 6011); as text only at 24px+ */
   --color-brand-text: #5c694c; /* green as small text */
-  --color-on-brand: #000000; /* never cream: 4.4:1 */
+  --color-brand-deep: #5c694c; /* green fills with a label on them: buttons, chips */
+  --color-on-brand: #ffffff; /* the label on brand-deep: 5.9:1, in Paper and Night */
   --color-accent: #b69e62; /* Klimt gold; decorative on paper */
   --color-accent-deep: #927e4e;
   --color-accent-text: #766740; /* gold as small text */

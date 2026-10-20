@@ -5,6 +5,25 @@ Versions are git tags, and follow semver: patch = fixes, minor = features
 own code. Sites depend on `#semver:^1.0.0`, so every patch and minor reaches
 them on `npm update` and no major ever does by surprise.
 
+## 1.6.0 — 2026-10-20
+
+The uben theme puts labels on green in white, on a darker green, as the UBEN
+Design System does since its version 13 and the iOS app since its Vienna step 1
+(Thomas: "dunkleres grün mit weißer schrift passt", and for the site's
+primary button "grün sieht bei beiden super aus").
+
+- **`styles/themes/uben.css`**: new `--color-brand-deep` (`#5c694c`) for green
+  fills that carry a label, so `bg-brand-deep` and its kin exist.
+  `--color-on-brand` turns from black to white: 5.9:1 on `brand-deep`, the
+  same in Paper and Night. `--color-brand` (`#6c7c59`, RAL 6011) stays for
+  patterns, the grid and states; black (4.7:1) and white (4.5:1) only just
+  pass on it, so nothing small sits there.
+
+What a site sees on update: only sites that import `themes/uben.css`, which
+today is uben.music alone. Nothing on its pages used `on-brand`, so nothing
+moves until a rule asks for the new tokens; its primary button does, in its
+own global.css.
+
 ## 1.5.1 — 2026-10-16
 
 llms.txt now leaves out the pages a site keeps out of its sitemap. Its filter
