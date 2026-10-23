@@ -4,19 +4,25 @@
 #
 # `npm update` takes every patch and minor release the site's ranges allow,
 # never a major, and that includes new kit tags. The site is built before and
-# after, and ci/visual-diff.mjs compares the two builds page by page.
+# after, and ci/compare.sh compares the two builds page by page.
 # - A visitor could not tell them apart: the update is committed straight to
 #   main, which deploys the site. Nobody is asked.
 # - Something changed, or the new build fails: the update waits on a branch
 #   deps/<date>, and an issue assigned to the reviewer says what changed. The
 #   screenshots are attached to the run.
+#
+# Majors never ship on their own: most of what they break (type checks, the
+# Worker, the deploy) does not show in a screenshot. Each one the ranges hold
+# back is tried alone on top of main, compared the same way, and left on a
+# branch deps/major-<package>-<line> with an issue, "Major update: …". Each
+# major is asked about once; closing its issue skips it.
 name: Dependency update
 
 on:
   workflow_call:
     inputs:
       reviewer:
-        description: Who is asked when the comparison finds a difference (a GitHub login)
+        description: Who is asked when a run needs a human (a GitHub login)
         type: string
         default: bukaznik
 
@@ -65,30 +71,23 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Build before
-        if: steps.update.outputs.changed == 'true'
-        working-directory: before
-        run: npm ci --no-audit --no-fund && npm run build
-      - name: Build after
-        id: build
-        if: steps.update.outputs.changed == 'true'
-        working-directory: after
-        continue-on-error: true
-        run: npm run build 2>&1 | tee ../build-after.log; exit "${PIPESTATUS[0]}"
-
-      - name: Compare
+      - name: Build and compare
         id: compare
-        if: steps.build.outcome == 'success'
+        if: steps.update.outputs.changed == 'true'
         run: |
-          (cd kit/ci && npm ci --no-audit --no-fund && npx playwright install --with-deps chromium)
+          (cd before && npm ci --no-audit --no-fund)
           set +e
-          node kit/ci/visual-diff.mjs before/dist after/dist report
+          kit/ci/compare.sh before after report
           code=$?
           set -e
-          if [ "$code" = 2 ]; then exit 2; fi
-          echo "same=$([ "$code" = 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          case "$code" in
+            0) echo "result=same" >> "$GITHUB_OUTPUT" ;;
+            1) echo "result=different" >> "$GITHUB_OUTPUT" ;;
+            3) echo "result=build-failed" >> "$GITHUB_OUTPUT" ;;
+            *) exit "$code" ;;
+          esac
       - name: Keep the screenshots
-        if: steps.compare.outputs.same == 'false'
+        if: steps.compare.outputs.result == 'different' || steps.compare.outputs.result == 'build-failed'
         uses: actions/upload-artifact@v7
         with:
           name: comparison
@@ -96,7 +95,7 @@ jobs:
           retention-days: 30
 
       - name: Same for visitors, so ship it
-        if: steps.compare.outputs.same == 'true'
+        if: steps.compare.outputs.result == 'same'
         working-directory: after
         run: |
           git config user.name 'github-actions[bot]'
@@ -112,13 +111,14 @@ jobs:
           git push origin HEAD:main
 
       - name: Something changed, so ask
-        if: steps.build.outcome == 'failure' || steps.compare.outputs.same == 'false'
+        if: steps.compare.outputs.result == 'different' || steps.compare.outputs.result == 'build-failed'
         working-directory: after
         env:
           GH_TOKEN: ${{ github.token }}
           REVIEWER: ${{ inputs.reviewer }}
+          REPO: ${{ github.server_url }}/${{ github.repository }}
           RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          BUILD_FAILED: ${{ steps.build.outcome == 'failure' }}
+          RESULT: ${{ steps.compare.outputs.result }}
         run: |
           branch="deps/$(date -u +%F)"
           git config user.name 'github-actions[bot]'
@@ -127,11 +127,11 @@ jobs:
           git commit -a -q -m "Update dependencies" -m "$(cat ../changes.md)"
           git push -q -f origin "$branch"
           {
-            if [ "$BUILD_FAILED" = true ]; then
+            if [ "$RESULT" = build-failed ]; then
               echo "The site no longer builds after this week's update, so the update waits on branch \`$branch\`."
               echo
               echo '```'
-              tail -30 ../build-after.log
+              tail -30 ../report/build.log
               echo '```'
             else
               echo "This week's update changes what a visitor sees, so it waits on branch \`$branch\`."
@@ -145,7 +145,7 @@ jobs:
             echo
             cat ../changes.md
             echo
-            echo "To ship it, [open a pull request from the branch](${{ github.server_url }}/${{ github.repository }}/compare/main...$branch?expand=1) and merge it. To skip it, delete the branch and close this issue; next week's run will try again."
+            echo "To ship it, [open a pull request from the branch]($REPO/compare/main...$branch?expand=1) and merge it. To skip it, delete the branch and close this issue; next week's run will try again."
           } > ../issue.md
           title='Dependency update needs a look'
           open=$(gh issue list --state open --search "in:title \"$title\"" --json number --jq '.[0].number // empty')
@@ -154,3 +154,182 @@ jobs:
           else
             gh issue create --title "$title" --assignee "$REVIEWER" --body-file ../issue.md
           fi
+
+  majors:
+    needs: update
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      list: ${{ steps.find.outputs.list }}
+    steps:
+      - name: Check out the site (main, after this week's update)
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          path: site
+          persist-credentials: false
+      - name: Check out the kit's CI tools
+        uses: actions/checkout@v7
+        with:
+          repository: phonicscore/astro-kit
+          path: kit
+          sparse-checkout: ci
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - name: Find the majors nobody was asked about yet
+        id: find
+        working-directory: site
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          npm ci --no-audit --no-fund
+          npm outdated --json > ../outdated.json || true
+          node ../kit/ci/majors.mjs < ../outdated.json > ../majors.json
+          known=$(gh issue list --state all --search 'in:title "Major update:"' --limit 200 --json title --jq '[.[].title]')
+          jq -c --argjson known "$known" \
+            '[.[] | select(("Major update: \(.name) \(.line)") as $t | any($known[]; . == $t) | not)]' \
+            ../majors.json > ../new.json
+          echo "Held back: $(cat ../majors.json)"
+          echo "Not asked about yet: $(cat ../new.json)"
+          echo "list=$(cat ../new.json)" >> "$GITHUB_OUTPUT"
+
+  major:
+    needs: majors
+    if: needs.majors.outputs.list != '' && needs.majors.outputs.list != '[]'
+    name: major ${{ matrix.major.name }} ${{ matrix.major.line }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        major: ${{ fromJSON(needs.majors.outputs.list) }}
+    env:
+      NAME: ${{ matrix.major.name }}
+      FROM: ${{ matrix.major.from }}
+      TO: ${{ matrix.major.to }}
+      LINE: ${{ matrix.major.line }}
+      BRANCH: deps/major-${{ matrix.major.slug }}
+    steps:
+      - name: Check out the site (before)
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          path: before
+          persist-credentials: false
+      - name: Check out the site (after)
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          path: after
+      - name: Check out the kit's CI tools
+        uses: actions/checkout@v7
+        with:
+          repository: phonicscore/astro-kit
+          path: kit
+          sparse-checkout: ci
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            before/package-lock.json
+            kit/ci/package-lock.json
+
+      - name: Install the major
+        id: install
+        working-directory: after
+        run: |
+          npm ci --no-audit --no-fund
+          if npm install --no-audit --no-fund "$NAME@$TO" > ../install.log 2>&1; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            tail -40 ../install.log
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Build and compare
+        id: compare
+        if: steps.install.outputs.ok == 'true'
+        run: |
+          (cd before && npm ci --no-audit --no-fund)
+          set +e
+          kit/ci/compare.sh before after report
+          code=$?
+          set -e
+          case "$code" in
+            0) echo "result=same" >> "$GITHUB_OUTPUT" ;;
+            1) echo "result=different" >> "$GITHUB_OUTPUT" ;;
+            3) echo "result=build-failed" >> "$GITHUB_OUTPUT" ;;
+            *) exit "$code" ;;
+          esac
+      - name: Keep the screenshots
+        if: steps.compare.outputs.result == 'different' || steps.compare.outputs.result == 'build-failed'
+        uses: actions/upload-artifact@v7
+        with:
+          name: major-${{ matrix.major.slug }}
+          path: report
+          retention-days: 30
+
+      - name: Ask
+        working-directory: after
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REVIEWER: ${{ inputs.reviewer }}
+          REPO: ${{ github.server_url }}/${{ github.repository }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          INSTALLED: ${{ steps.install.outputs.ok }}
+          RESULT: ${{ steps.compare.outputs.result }}
+        run: |
+          if [ "$INSTALLED" = true ]; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git switch -q -c "$BRANCH"
+            git commit -a -q -m "Update $NAME to $TO (major)"
+            git push -q -f origin "$BRANCH"
+          fi
+          notes=$(npm view "$NAME" repository.url 2>/dev/null | sed -E 's#^git\+##; s#^git://#https://#; s#^ssh://git@#https://#; s#\.git$##')
+          case "$notes" in
+            https://github.com/*) notes="$notes/releases" ;;
+            *) notes="https://www.npmjs.com/package/$NAME?activeTab=versions" ;;
+          esac
+          {
+            echo "**$NAME $FROM → $TO** is a major update. It can break things a screenshot does not show (type checks, the Worker, the deploy), so it never ships on its own."
+            echo
+            case "$RESULT" in
+              same)
+                echo "With only this update on top of main, the site looks the same: $(head -1 ../report/report.md | tr -d '*')." ;;
+              different)
+                echo "With only this update on top of main, the site looks different:"
+                echo
+                cat ../report/report.md
+                echo
+                echo "Before, after and diff screenshots: **Artifacts** on [the run]($RUN)." ;;
+              build-failed)
+                echo "With only this update on top of main, the site no longer builds:"
+                echo
+                echo '```'
+                tail -30 ../report/build.log
+                echo '```' ;;
+              *)
+                echo "npm cannot install it next to the site's other dependencies. Often that is a peer dependency: an Astro major, for one, has to reach the kit first."
+                echo
+                echo '```'
+                tail -30 ../install.log
+                echo '```' ;;
+            esac
+            echo
+            echo "Release notes: $notes"
+            echo
+            if [ "$INSTALLED" = true ]; then
+              echo "The update is on branch \`$BRANCH\`. To take it, read the release notes for breaking changes, then [open a pull request from the branch]($REPO/compare/main...$BRANCH?expand=1) and merge it."
+              echo
+            fi
+            echo "To skip this major, close this issue: the weekly run asks about each major once."
+          } > ../issue.md
+          gh issue create --title "Major update: $NAME $LINE" --assignee "$REVIEWER" --body-file ../issue.md

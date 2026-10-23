@@ -218,12 +218,22 @@ If anything differs, or the new build fails, the update waits on a branch
 `bukaznik` with the report; the before, after and diff screenshots are the
 run's artifact. Merge the branch to ship it, or delete it to skip the week.
 
-Majors stay manual: read the upgrade guide, then `npx @astrojs/upgrade` for
-Astro. To try the comparison locally:
+The run happens on GitHub's servers; no machine of ours needs to be on.
+
+**Majors never ship on their own.** Most of what a major breaks (type checks,
+the contact Worker, the deploy) does not show in a screenshot, and an Astro
+major has to reach the kit's `peerDependencies` first. So the same run tries
+each major the ranges hold back, alone on top of `main`, compares it the same
+way, and leaves it on a branch `deps/major-<package>-<line>` with an issue,
+"Major update: typescript 6 → 7", holding the comparison and the release
+notes link. Each major is asked about once: closing its issue skips it.
+To take one, read the release notes (for Astro: the upgrade guide, then
+`npx @astrojs/upgrade`), then merge the branch or redo it by hand.
+
+To try the comparison locally, with both checkouts installed:
 
 ```sh
-cd ci && npm ci && npx playwright install chromium
-node visual-diff.mjs <site>/before/dist <site>/after/dist out
+ci/compare.sh <site>/before <site>/after out
 ```
 
 ## Rules for this repo
