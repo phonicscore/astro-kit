@@ -230,6 +230,8 @@ notes link. Each major is asked about once: closing its issue skips it.
 To take one, read the release notes (for Astro: the upgrade guide, then
 `npx @astrojs/upgrade`), then merge the branch or redo it by hand.
 
+A run takes 2 to 5 minutes per site.
+
 To try the comparison locally, with both checkouts installed:
 
 ```sh

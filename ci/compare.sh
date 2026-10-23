@@ -18,5 +18,7 @@ if ! (cd "$after" && npm run build) > "$report/build.log" 2>&1; then
   exit 3
 fi
 
-(cd "$ci" && npm ci --no-audit --no-fund && npx playwright install --with-deps chromium)
+# The browser only: GitHub's Ubuntu image already has Chrome's system
+# libraries, and `--with-deps` once spent 8 minutes on a slow apt mirror.
+(cd "$ci" && npm ci --no-audit --no-fund && npx playwright install chromium-headless-shell)
 node "$ci/visual-diff.mjs" "$before/dist" "$after/dist" "$report"
