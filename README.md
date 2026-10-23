@@ -171,11 +171,60 @@ automatically but never jumps a breaking release:
 "@phonicscore/astro-kit": "github:phonicscore/astro-kit#semver:^1.0.0"
 ```
 
+Step 3 also happens on its own: the weekly dependency update below takes new
+kit tags along with everything else.
+
 Versioning rule (semver): **patch** for fixes; **minor** for features — a new
 integration, a new component, a safe new default; **major** when any site has
 to edit its own code to keep working. Write the migration step for a major
 into the changelog. We started at 1.0.0 on purpose: on 0.x, npm reads `^0.1.0`
 as "0.1.x only", so a site would never receive 0.2.0.
+
+## Weekly dependency update
+
+Every Monday at 05:00 UTC each site runs `npm update`, which takes every patch
+and minor release its ranges allow (Astro, Tailwind, Wrangler, this kit, and
+everything they depend on), never a major. The steps live in
+`.github/workflows/dependency-update.yml`; a site calls them with a short
+workflow of its own (the starter ships it):
+
+```yaml
+on:
+  schedule:
+    - cron: '0 5 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: write
+  issues: write
+jobs:
+  update:
+    uses: phonicscore/astro-kit/.github/workflows/dependency-update.yml@main
+```
+
+The run builds the site before and after the update, and `ci/visual-diff.mjs`
+compares the two builds:
+
+- every page as a full-page screenshot at 1280 px and 390 px, pixel by pixel,
+  rendered offline with motion reduced;
+- every page's metadata (title, meta tags, canonical and alternate links,
+  JSON-LD);
+- console errors and exceptions that only the new build throws;
+- every other file outside `_astro/` (sitemaps, robots.txt, llms.txt,
+  `_headers`, share cards), byte for byte.
+
+If nothing differs, the update is committed to `main`, which deploys the site.
+If anything differs, or the new build fails, the update waits on a branch
+`deps/<date>` and an issue, "Dependency update needs a look", is assigned to
+`bukaznik` with the report; the before, after and diff screenshots are the
+run's artifact. Merge the branch to ship it, or delete it to skip the week.
+
+Majors stay manual: read the upgrade guide, then `npx @astrojs/upgrade` for
+Astro. To try the comparison locally:
+
+```sh
+cd ci && npm ci && npx playwright install chromium
+node visual-diff.mjs <site>/before/dist <site>/after/dist out
+```
 
 ## Rules for this repo
 

@@ -1,0 +1,156 @@
+# The weekly dependency update for a PhonicScore Astro site. Each site calls
+# this from its own .github/workflows/dependency-update.yml, so the steps live
+# in one place and a change here reaches every site.
+#
+# `npm update` takes every patch and minor release the site's ranges allow,
+# never a major, and that includes new kit tags. The site is built before and
+# after, and ci/visual-diff.mjs compares the two builds page by page.
+# - A visitor could not tell them apart: the update is committed straight to
+#   main, which deploys the site. Nobody is asked.
+# - Something changed, or the new build fails: the update waits on a branch
+#   deps/<date>, and an issue assigned to the reviewer says what changed. The
+#   screenshots are attached to the run.
+name: Dependency update
+
+on:
+  workflow_call:
+    inputs:
+      reviewer:
+        description: Who is asked when the comparison finds a difference (a GitHub login)
+        type: string
+        default: bukaznik
+
+jobs:
+  update:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    concurrency: dependency-update
+    steps:
+      - name: Check out the site (before)
+        uses: actions/checkout@v7
+        with:
+          path: before
+          persist-credentials: false
+      - name: Check out the site (after)
+        uses: actions/checkout@v7
+        with:
+          path: after
+      - name: Check out the kit's CI tools
+        uses: actions/checkout@v7
+        with:
+          repository: phonicscore/astro-kit
+          path: kit
+          sparse-checkout: ci
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            before/package-lock.json
+            kit/ci/package-lock.json
+
+      - name: Update
+        id: update
+        working-directory: after
+        run: |
+          npm ci --no-audit --no-fund
+          npm update --no-audit --no-fund
+          if git diff --quiet; then
+            echo "Nothing to update."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            node ../kit/ci/lockfile-changes.mjs ../before/package-lock.json package-lock.json > ../changes.md
+            cat ../changes.md
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build before
+        if: steps.update.outputs.changed == 'true'
+        working-directory: before
+        run: npm ci --no-audit --no-fund && npm run build
+      - name: Build after
+        id: build
+        if: steps.update.outputs.changed == 'true'
+        working-directory: after
+        continue-on-error: true
+        run: npm run build 2>&1 | tee ../build-after.log; exit "${PIPESTATUS[0]}"
+
+      - name: Compare
+        id: compare
+        if: steps.build.outcome == 'success'
+        run: |
+          (cd kit/ci && npm ci --no-audit --no-fund && npx playwright install --with-deps chromium)
+          set +e
+          node kit/ci/visual-diff.mjs before/dist after/dist report
+          code=$?
+          set -e
+          if [ "$code" = 2 ]; then exit 2; fi
+          echo "same=$([ "$code" = 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+      - name: Keep the screenshots
+        if: steps.compare.outputs.same == 'false'
+        uses: actions/upload-artifact@v7
+        with:
+          name: comparison
+          path: report
+          retention-days: 30
+
+      - name: Same for visitors, so ship it
+        if: steps.compare.outputs.same == 'true'
+        working-directory: after
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -a -q -F - <<EOF
+          Update dependencies (no visible change)
+
+          $(cat ../changes.md)
+
+          Screenshots, metadata and files before and after the update:
+          $(head -1 ../report/report.md | tr -d '*')
+          EOF
+          git push origin HEAD:main
+
+      - name: Something changed, so ask
+        if: steps.build.outcome == 'failure' || steps.compare.outputs.same == 'false'
+        working-directory: after
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REVIEWER: ${{ inputs.reviewer }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          BUILD_FAILED: ${{ steps.build.outcome == 'failure' }}
+        run: |
+          branch="deps/$(date -u +%F)"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -q -c "$branch"
+          git commit -a -q -m "Update dependencies" -m "$(cat ../changes.md)"
+          git push -q -f origin "$branch"
+          {
+            if [ "$BUILD_FAILED" = true ]; then
+              echo "The site no longer builds after this week's update, so the update waits on branch \`$branch\`."
+              echo
+              echo '```'
+              tail -30 ../build-after.log
+              echo '```'
+            else
+              echo "This week's update changes what a visitor sees, so it waits on branch \`$branch\`."
+              echo
+              cat ../report/report.md
+              echo
+              echo "Before, after and diff screenshots: **Artifacts** on [the run]($RUN)."
+            fi
+            echo
+            echo "**Updated**"
+            echo
+            cat ../changes.md
+            echo
+            echo "To ship it, [open a pull request from the branch](${{ github.server_url }}/${{ github.repository }}/compare/main...$branch?expand=1) and merge it. To skip it, delete the branch and close this issue; next week's run will try again."
+          } > ../issue.md
+          title='Dependency update needs a look'
+          open=$(gh issue list --state open --search "in:title \"$title\"" --json number --jq '.[0].number // empty')
+          if [ -n "$open" ]; then
+            gh issue comment "$open" --body-file ../issue.md
+          else
+            gh issue create --title "$title" --assignee "$REVIEWER" --body-file ../issue.md
+          fi
