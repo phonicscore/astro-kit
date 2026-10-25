@@ -201,8 +201,10 @@ jobs:
     uses: phonicscore/astro-kit/.github/workflows/dependency-update.yml@main
 ```
 
-The run builds the site before and after the update, and `ci/visual-diff.mjs`
-compares the two builds:
+The run installs the site before and after the update with `npm ci`, the way
+the hosts do, and builds both. `npm install` only warns about a peer conflict
+that makes `npm ci` fail, so a lockfile has to pass `npm ci` here before it
+can ship. Then `ci/visual-diff.mjs` compares the two builds:
 
 - every page as a full-page screenshot at 1280 px and 390 px, pixel by pixel,
   rendered offline with motion reduced;
@@ -213,10 +215,10 @@ compares the two builds:
   `_headers`, share cards), byte for byte.
 
 If nothing differs, the update is committed to `main`, which deploys the site.
-If anything differs, or the new build fails, the update waits on a branch
-`deps/<date>` and an issue, "Dependency update needs a look", is assigned to
-`bukaznik` with the report; the before, after and diff screenshots are the
-run's artifact. Merge the branch to ship it, or delete it to skip the week.
+If anything differs, or the new lockfile does not install or build, the
+update waits on a branch `deps/<date>` and an issue, "Dependency update needs
+a look", is assigned to `bukaznik` with the report; the before, after and
+diff screenshots are the run's artifact. Merge the branch to ship it, or delete it to skip the week.
 
 The run happens on GitHub's servers; no machine of ours needs to be on.
 
@@ -225,8 +227,15 @@ the contact Worker, the deploy) does not show in a screenshot, and an Astro
 major has to reach the kit's `peerDependencies` first. So the same run tries
 each major the ranges hold back, alone on top of `main`, compares it the same
 way, and leaves it on a branch `deps/major-<package>-<line>` with an issue,
-"Major update: typescript 6 → 7", holding the comparison and the release
-notes link. Each major is asked about once: closing its issue skips it.
+"Major update: astro 7 → 8", holding the comparison and the release notes
+link. Each major is asked about once: closing its issue skips it.
+
+A major that another package's peer range rules out waits without an issue:
+TypeScript 7 next to `@astrojs/check` 0.9, which accepts TypeScript 5 and 6
+only, would not even install on the hosts, and there is nothing to decide
+until `@astrojs/check` moves. The run tries again each week and asks once it
+installs. If the kit's own peer range is what rules a major out, it asks
+right away, because the kit has to move first.
 To take one, read the release notes (for Astro: the upgrade guide, then
 `npx @astrojs/upgrade`), then merge the branch or redo it by hand.
 

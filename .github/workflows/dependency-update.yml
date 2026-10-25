@@ -3,19 +3,25 @@
 # in one place and a change here reaches every site.
 #
 # `npm update` takes every patch and minor release the site's ranges allow,
-# never a major, and that includes new kit tags. The site is built before and
-# after, and ci/compare.sh compares the two builds page by page.
+# never a major, and that includes new kit tags. ci/compare.sh installs both
+# sides with `npm ci`, as the hosts do, builds them, and compares the two
+# builds page by page.
 # - A visitor could not tell them apart: the update is committed straight to
 #   main, which deploys the site. Nobody is asked.
-# - Something changed, or the new build fails: the update waits on a branch
-#   deps/<date>, and an issue assigned to the reviewer says what changed. The
-#   screenshots are attached to the run.
+# - Something changed, or the new lockfile does not install or build: the
+#   update waits on a branch deps/<date>, and an issue assigned to the
+#   reviewer says what changed. The screenshots are attached to the run.
 #
 # Majors never ship on their own: most of what they break (type checks, the
 # Worker, the deploy) does not show in a screenshot. Each one the ranges hold
-# back is tried alone on top of main, compared the same way, and left on a
-# branch deps/major-<package>-<line> with an issue, "Major update: …". Each
-# major is asked about once; closing its issue skips it.
+# back is tried alone on top of main and compared the same way.
+# - Another package's peer range rules it out (TypeScript 7 next to
+#   @astrojs/check 0.9): nothing to decide yet, so nobody is asked; the next
+#   run tries again.
+# - Otherwise it waits on a branch deps/major-<package>-<line> with an issue,
+#   "Major update: …". That includes a major the kit's own peer range rules
+#   out: the kit has to move first. Each major is asked about once; closing
+#   its issue skips it.
 name: Dependency update
 
 on:
@@ -71,11 +77,10 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Build and compare
+      - name: Install, build and compare
         id: compare
         if: steps.update.outputs.changed == 'true'
         run: |
-          (cd before && npm ci --no-audit --no-fund)
           set +e
           kit/ci/compare.sh before after report
           code=$?
@@ -84,10 +89,11 @@ jobs:
             0) echo "result=same" >> "$GITHUB_OUTPUT" ;;
             1) echo "result=different" >> "$GITHUB_OUTPUT" ;;
             3) echo "result=build-failed" >> "$GITHUB_OUTPUT" ;;
+            4) echo "result=install-failed" >> "$GITHUB_OUTPUT" ;;
             *) exit "$code" ;;
           esac
       - name: Keep the screenshots
-        if: steps.compare.outputs.result == 'different' || steps.compare.outputs.result == 'build-failed'
+        if: steps.compare.outputs.result != '' && steps.compare.outputs.result != 'same'
         uses: actions/upload-artifact@v7
         with:
           name: comparison
@@ -111,7 +117,7 @@ jobs:
           git push origin HEAD:main
 
       - name: Something changed, so ask
-        if: steps.compare.outputs.result == 'different' || steps.compare.outputs.result == 'build-failed'
+        if: steps.compare.outputs.result != '' && steps.compare.outputs.result != 'same'
         working-directory: after
         env:
           GH_TOKEN: ${{ github.token }}
@@ -127,19 +133,26 @@ jobs:
           git commit -a -q -m "Update dependencies" -m "$(cat ../changes.md)"
           git push -q -f origin "$branch"
           {
-            if [ "$RESULT" = build-failed ]; then
-              echo "The site no longer builds after this week's update, so the update waits on branch \`$branch\`."
-              echo
-              echo '```'
-              tail -30 ../report/build.log
-              echo '```'
-            else
-              echo "This week's update changes what a visitor sees, so it waits on branch \`$branch\`."
-              echo
-              cat ../report/report.md
-              echo
-              echo "Before, after and diff screenshots: **Artifacts** on [the run]($RUN)."
-            fi
+            case "$RESULT" in
+              install-failed)
+                echo "After this week's update, \`npm ci\` fails, so the hosts could not install the site. The update waits on branch \`$branch\`."
+                echo
+                echo '```'
+                tail -30 ../report/install.log
+                echo '```' ;;
+              build-failed)
+                echo "The site no longer builds after this week's update, so the update waits on branch \`$branch\`."
+                echo
+                echo '```'
+                tail -30 ../report/build.log
+                echo '```' ;;
+              *)
+                echo "This week's update changes what a visitor sees, so it waits on branch \`$branch\`."
+                echo
+                cat ../report/report.md
+                echo
+                echo "Before, after and diff screenshots: **Artifacts** on [the run]($RUN)." ;;
+            esac
             echo
             echo "**Updated**"
             echo
@@ -253,11 +266,10 @@ jobs:
             tail -40 ../install.log
             echo "ok=false" >> "$GITHUB_OUTPUT"
           fi
-      - name: Build and compare
+      - name: Install, build and compare
         id: compare
         if: steps.install.outputs.ok == 'true'
         run: |
-          (cd before && npm ci --no-audit --no-fund)
           set +e
           kit/ci/compare.sh before after report
           code=$?
@@ -266,7 +278,23 @@ jobs:
             0) echo "result=same" >> "$GITHUB_OUTPUT" ;;
             1) echo "result=different" >> "$GITHUB_OUTPUT" ;;
             3) echo "result=build-failed" >> "$GITHUB_OUTPUT" ;;
+            4) cp report/install.log install.log; echo "result=install-failed" >> "$GITHUB_OUTPUT" ;;
             *) exit "$code" ;;
+          esac
+      - name: Find what holds it back
+        id: blockers
+        if: steps.install.outputs.ok == 'false' || steps.compare.outputs.result == 'install-failed'
+        run: |
+          # npm names the package whose peer range rules the major out:
+          #   npm error peer typescript@"^5.0.0 || ^6.0.0" from @astrojs/check@0.9.12
+          blockers=$(sed -nE 's/^npm (error|warn) +peer .* from (@?[^@ ]+)@.*/\2/p' install.log | sort -u | paste -sd ' ' -)
+          echo "list=$blockers" >> "$GITHUB_OUTPUT"
+          case " $blockers " in
+            "  ") ;;                         # npm failed for another reason: ask
+            *" @phonicscore/astro-kit "*) ;; # the kit has to move first: ask
+            *)
+              echo "wait=true" >> "$GITHUB_OUTPUT"
+              echo "**$NAME $LINE** does not install yet: $blockers does not accept it. Nobody is asked; the next run tries again." >> "$GITHUB_STEP_SUMMARY" ;;
           esac
       - name: Keep the screenshots
         if: steps.compare.outputs.result == 'different' || steps.compare.outputs.result == 'build-failed'
@@ -277,16 +305,21 @@ jobs:
           retention-days: 30
 
       - name: Ask
+        if: steps.blockers.outputs.wait != 'true'
         working-directory: after
         env:
           GH_TOKEN: ${{ github.token }}
           REVIEWER: ${{ inputs.reviewer }}
           REPO: ${{ github.server_url }}/${{ github.repository }}
           RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          INSTALLED: ${{ steps.install.outputs.ok }}
           RESULT: ${{ steps.compare.outputs.result }}
+          BLOCKERS: ${{ steps.blockers.outputs.list }}
         run: |
-          if [ "$INSTALLED" = true ]; then
+          case "$RESULT" in
+            same | different | build-failed) branched=true ;;
+            *) branched=false ;;
+          esac
+          if [ "$branched" = true ]; then
             git config user.name 'github-actions[bot]'
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
             git switch -q -c "$BRANCH"
@@ -303,7 +336,7 @@ jobs:
             echo
             case "$RESULT" in
               same)
-                echo "With only this update on top of main, the site looks the same: $(head -1 ../report/report.md | tr -d '*')." ;;
+                echo "With only this update on top of main, the site installs, builds and looks the same: $(head -1 ../report/report.md | tr -d '*')." ;;
               different)
                 echo "With only this update on top of main, the site looks different:"
                 echo
@@ -317,7 +350,11 @@ jobs:
                 tail -30 ../report/build.log
                 echo '```' ;;
               *)
-                echo "npm cannot install it next to the site's other dependencies. Often that is a peer dependency: an Astro major, for one, has to reach the kit first."
+                if [ -n "$BLOCKERS" ]; then
+                  echo "npm cannot install it: the peer range of $BLOCKERS rules it out. The kit has to allow it first: release a kit major whose \`peerDependencies\` take it, then this site follows."
+                else
+                  echo "npm cannot install it next to the site's other dependencies:"
+                fi
                 echo
                 echo '```'
                 tail -30 ../install.log
@@ -326,7 +363,7 @@ jobs:
             echo
             echo "Release notes: $notes"
             echo
-            if [ "$INSTALLED" = true ]; then
+            if [ "$branched" = true ]; then
               echo "The update is on branch \`$BRANCH\`. To take it, read the release notes for breaking changes, then [open a pull request from the branch]($REPO/compare/main...$BRANCH?expand=1) and merge it."
               echo
             fi
