@@ -4,8 +4,10 @@
  *   @import 'tailwindcss';
  *   @import '@phonicscore/astro-kit/styles/base.css';
  *
- * Structure only. Colors, type and radii come from the site's own @theme, so
- * every site keeps its identity. Token contract the kit relies on:
+ * Structure only, plus what accessibility needs everywhere (long words that
+ * break, focus rings, underlined text links). Colors, type and radii come from
+ * the site's own @theme, so every site keeps its identity. Token contract the
+ * kit relies on:
  *   --color-accent   focus rings
  */
 
@@ -15,10 +17,29 @@
 @source '../components';
 
 @layer base {
+  /* A word wider than its line (an email address, a German compound at
+     heading size on a phone) breaks instead of pushing the page sideways:
+     WCAG reflow asks for no horizontal scrolling at 320px. Only a word that
+     cannot fit a line on its own is broken, so nothing else moves. */
+  html {
+    overflow-wrap: break-word;
+  }
+
   :where(a, button, input, textarea, select, [tabindex]):focus-visible {
     outline: 3px solid var(--color-accent);
     outline-offset: 2px;
     border-radius: 4px;
+  }
+
+  /* Links in running text are underlined. Tailwind's preflight takes the
+     underline off every link, so a link inside a paragraph stands out by its
+     color alone, and against body text that color rarely reaches the 3:1 WCAG
+     asks for (axe: link-in-text-block). A link without a class is a text link:
+     Markdown writes them that way, while buttons, menus and cards carry
+     classes. Same specificity as the preflight rule and after it, so the
+     site's own `a` rules still win. */
+  a:where([href]:not([class])) {
+    text-decoration-line: underline;
   }
 }
 
@@ -73,6 +94,9 @@
   }
   .prose .media-split {
     display: grid;
+    /* One column on phones, held to the page's width: an implicit column grows
+       to the longest word in it (OpenSheetMusicDisplay in a heading). */
+    grid-template-columns: minmax(0, 1fr);
     gap: 1.5rem;
     align-items: center;
     margin: 3em 0;

@@ -5,7 +5,63 @@ Versions are git tags, and follow semver: patch = fixes, minor = features
 own code. Sites depend on `#semver:^1.0.0`, so every patch and minor reaches
 them on `npm update` and no major ever does by surprise.
 
-## 1.6.0 — 2026-10-20
+## 1.7.0 — 2026-10-26
+
+Accessibility defaults. axe-core (WCAG 2.2 AA and best practice) on every
+page of musicxml.tools, uben.music, phonicscore.com and osmd-wp.com found the
+same problems on each site, and they came from the kit or from the Tailwind
+reset the kit sets up. These are safe defaults rather than options because
+each one only changes what fails WCAG today.
+
+- **`styles/base.css`: links in running text are underlined.** Tailwind's
+  preflight sets `text-decoration: inherit` on every link, so a link inside a
+  paragraph stood out by its color alone, at 1.07:1 to 2.9:1 against the text
+  around it where WCAG asks for 3:1 or a second cue (axe:
+  `link-in-text-block`, 34 links on uben.music, 23 on osmd-wp.com). The new
+  rule underlines links without a class attribute,
+  `a:where([href]:not([class]))`: Markdown writes text links that way, while
+  buttons, menus and cards carry classes. It has the preflight rule's
+  specificity and comes after it, so a site's own `a` rules still win.
+- **`styles/base.css`: long words break.** `html { overflow-wrap: break-word }`:
+  a word wider than its line, such as an email address or a German compound
+  at heading size on a phone, breaks instead of pushing the page sideways
+  (WCAG reflow: no horizontal scrolling at 320px). Only a word that cannot
+  fit a line on its own is broken.
+- **`styles/base.css`: the media split holds its phone column to the page.**
+  Below 768px `.prose .media-split` had no column template, and the implicit
+  column grew to the longest word in it: "OpenSheetMusicDisplay" in a heading
+  pushed phonicscore.com's /solutions/ 14px past a 320px screen. It now has
+  `grid-template-columns: minmax(0, 1fr)`; where nothing overflowed, nothing
+  moves.
+- **`components/Breadcrumbs.astro`: links at full contrast by default.** The
+  default dimmed the site's link color with `opacity-70`: osmd-wp.com's purple
+  came out at 3.63:1 and musicxml.tools' blue at 2.77:1, where text needs
+  4.5:1. Ancestors now keep the site's link color at full strength and
+  underline on hover (`no-underline hover:underline`). A site that passes
+  `classes` sees no change.
+
+What a site sees on update:
+- uben.music: underlines under the text links of its legal pages and its 404
+  page. Its breadcrumbs: none on the site.
+- osmd-wp.com: underlines under its text links (legal pages, account, pricing,
+  welcome, the demo's credits), and the breadcrumbs on imprint, privacy and
+  terms in the full purple (#902cab, 6.7:1) instead of 70% of it.
+- phonicscore.com: its prose links were underlined already; the link on the
+  404 page gets one. Its breadcrumbs pass their own classes and stay. On
+  /solutions/ and /de/produkte/ at 320px, the media split stops overflowing.
+- musicxml.tools: no visible change. It underlines every link itself and
+  passes its own breadcrumb classes.
+- The starter: underlines under classless links in text, breadcrumbs in the
+  full link color.
+- Long words break only where they overflowed before.
+
+Verified with axe-core 4.14 on production builds, each site on this version
+plus its own fixes (branch `accessibility-pass` in each repo): 0 violations on
+all 27 pages of uben.music (Paper and Night, 1280 and 375px) and on all 9 of
+osmd-wp.com (1280, 800 and 375px, the score demo loaded as well). On
+phonicscore.com's 64 pages the one rule left is heading order on six service
+pages, which needs a design call. No page of the three scrolls sideways at
+the widths checked, from 320 to 1280px.
 
 The uben theme puts labels on green in white, on a darker green, as the UBEN
 Design System does since its version 13 and the iOS app since its Vienna step 1

@@ -4,8 +4,11 @@
  * in the page's schema graph). Mono data voice by default; ancestors are links,
  * the current page is plain text.
  *
- * Colors only use the text color it inherits plus --color-accent, so it works
- * on any site's palette. Pass `classes` to match a site's own tokens exactly.
+ * Colors only use what the site already has, so it works on any palette:
+ * ancestors keep the site's link color at full strength (dimming it with
+ * opacity took accent links below the 4.5:1 text contrast), the current page
+ * the text color it inherits. Ancestors underline on hover. Pass `classes` to
+ * match a site's own tokens exactly.
  */
 interface Crumb {
   name: string;
@@ -17,7 +20,7 @@ interface Props {
 }
 const { crumbs, classes = {} } = Astro.props;
 const last = crumbs.length - 1;
-const link = classes.link ?? 'opacity-70 no-underline hover:opacity-100 hover:text-accent';
+const link = classes.link ?? 'no-underline hover:underline';
 const current = classes.current ?? '';
 const separator = classes.separator ?? 'opacity-40';
 ---

@@ -18,7 +18,7 @@ already wired to the kit.
 | `Analytics` | `…/components/Analytics.astro` | Usermaven, cookieless (no banner), production-only |
 | `Breadcrumbs`, `Prose` | `…/components/*.astro` | visible breadcrumb trail; the wrapper for rendered Markdown |
 | `FromVienna` | `…/components/FromVienna.astro` | the "From Vienna with music" sign-off for the bottom of every page: `<FromVienna />` on dark grounds, `<FromVienna ink="original" />` on light ones |
-| Base styles | `…/styles/base.css` | focus rings, the flyout hover bridge, layout for the content transforms |
+| Base styles | `…/styles/base.css` | underlined text links, long words that break, focus rings, the flyout hover bridge, layout for the content transforms |
 | Content transforms | `…/lib/rehype-content.mjs` | rebuilds image grids, stat rows, cards, media splits and process steps from flat Markdown (applied by the preset) |
 | Helpers | `…/lib/og.js`, `…/lib/i18n.js` | OG-card slugs; UI-string translator and locale-from-path |
 | Contact Worker | `…/worker/contact.ts` + `schema.sql` | POST handler: honeypot, Turnstile, rate limit, D1 log, Resend delivery |
@@ -256,6 +256,8 @@ ci/compare.sh <site>/before <site>/after out
   decision (2026-10-16): the generator runs in every site unless it opts out,
   in a neutral look until the site themes it. It only writes the cards a
   page's `og:image` names, and never replaces a file the site ships.
+  Accessibility defaults reach every site too (1.7.0: underlined text links,
+  long words that break), as long as each one only changes what fails WCAG.
 - **No Tailwind Plus code — ever.** This repository is public. The Tailwind Plus
   licence covers using its components in our own projects, not redistributing
   them — and a public package is redistribution. Components built from a
