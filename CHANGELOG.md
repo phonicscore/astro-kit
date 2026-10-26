@@ -5,6 +5,19 @@ Versions are git tags, and follow semver: patch = fixes, minor = features
 own code. Sites depend on `#semver:^1.0.0`, so every patch and minor reaches
 them on `npm update` and no major ever does by surprise.
 
+## 1.8.0 — 2026-10-26
+
+- **`Analytics` works with Usermaven's current script.** The script now reads
+  its settings from data attributes on its own tag and starts itself; the kit's
+  `usermaven("init", …)` call went nowhere, so no site could have counted a
+  visit (none had a key set yet). The loader sets `data-key`,
+  `data-tracking-host`, `data-autocapture`, cookieless
+  `data-privacy-policy="strict"` and `data-ip-policy="strict"` (Usermaven
+  drops the last part of the IP address before processing).
+- **`Analytics` takes `src` and `trackingHost`** for a proxy on the site's own
+  domain, so the browser makes no third-party request: musicxml.tools serves
+  `/um/lib.js` and `/um/api/…` from its Worker. Defaults are Usermaven's hosts.
+
 ## 1.7.0 — 2026-10-26
 
 Accessibility defaults. axe-core (WCAG 2.2 AA and best practice) on every
