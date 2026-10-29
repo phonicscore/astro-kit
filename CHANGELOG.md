@@ -5,6 +5,16 @@ Versions are git tags, and follow semver: patch = fixes, minor = features
 own code. Sites depend on `#semver:^1.0.0`, so every patch and minor reaches
 them on `npm update` and no major ever does by surprise.
 
+## 1.9.0 — 2026-10-29
+
+- **`track()` sends custom events to Usermaven** (`lib/track.js`), for goals
+  and funnels: a file opened, a result downloaded. It calls the
+  `window.usermaven` queue that `Analytics` sets up, so events take the page
+  views' way (a site's own-domain proxy included), and it does nothing in the
+  dev server, previews and local builds. Properties stay values from a short,
+  fixed list, never personal data. musicxml.tools counts six steps in its
+  tools with it.
+
 ## 1.8.0 — 2026-10-26
 
 - **`Analytics` works with Usermaven's current script.** The script now reads
