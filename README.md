@@ -18,7 +18,7 @@ already wired to the kit.
 | `Analytics` | `…/components/Analytics.astro` | Usermaven, cookieless (no banner), production-only; `src` and `trackingHost` for a proxy on the site's own domain |
 | `track()` | `…/lib/track.js` | Usermaven custom events for goals and funnels (a file opened, a result downloaded); does nothing without `Analytics` |
 | `Breadcrumbs`, `Prose` | `…/components/*.astro` | visible breadcrumb trail; the wrapper for rendered Markdown |
-| `FromVienna` | `…/components/FromVienna.astro` | the "From Vienna with music" sign-off for the bottom of every page: `<FromVienna />` on dark grounds, `<FromVienna ink="original" />` on light ones |
+| `FromVienna` | `…/components/FromVienna.astro` | the "From Vienna with music" sign-off for the bottom of every page, a link to https://phonicscore.com: `<FromVienna />` on dark grounds, `<FromVienna ink="original" />` on light ones; `class` sizes the link |
 | Base styles | `…/styles/base.css` | underlined text links, long words that break, focus rings, the flyout hover bridge, layout for the content transforms |
 | Content transforms | `…/lib/rehype-content.mjs` | rebuilds image grids, stat rows, cards, media splits and process steps from flat Markdown (applied by the preset) |
 | Helpers | `…/lib/og.js`, `…/lib/i18n.js` | OG-card slugs; UI-string translator and locale-from-path |
@@ -259,6 +259,9 @@ ci/compare.sh <site>/before <site>/after out
   page's `og:image` names, and never replaces a file the site ships.
   Accessibility defaults reach every site too (1.7.0: underlined text links,
   long words that break), as long as each one only changes what fails WCAG.
+  The "From Vienna with music" sign-off links to https://phonicscore.com on
+  every site, by Thomas's decision (2026-10-31), and so does "PhonicScore
+  GmbH" in each site's own footer.
 - **No Tailwind Plus code — ever.** This repository is public. The Tailwind Plus
   licence covers using its components in our own projects, not redistributing
   them — and a public package is redistribution. Components built from a

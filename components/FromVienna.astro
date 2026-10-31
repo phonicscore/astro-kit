@@ -17,6 +17,12 @@
  *   dark ground   <FromVienna />                 dim (#9c9485)
  *   light ground  <FromVienna ink="original" />  the original warm grey (#423e3b)
  * Another ink is a find-and-replace of the one fill colour in the SVG.
+ *
+ * It always links to https://phonicscore.com (Thomas, 2026-10-31). `class` goes
+ * on the link, so a site sizes it as before (`w-24`) and a light/dark switch
+ * hides the link itself, not just the image inside a focusable link; the
+ * artwork fills the link. The rules sit in the base layer without specificity,
+ * so a site's classes win.
  */
 import { Image } from 'astro:assets';
 import dim from '../assets/from-vienna-with-music-dim.svg';
@@ -25,17 +31,30 @@ import original from '../assets/from-vienna-with-music.svg';
 interface Props {
   /** `dim` for dark grounds (default), `original` for light ones. */
   ink?: 'dim' | 'original';
-  /** Rendered width in px; the height follows the artwork (100 × 83). */
+  /** Rendered width in px, unless `class` sizes the link; the height follows the artwork (100 × 83). */
   width?: number;
+  /** Classes for the link: its size, a light/dark switch. */
   class?: string;
 }
 
 const { ink = 'dim', width = 100, class: className } = Astro.props;
 ---
 
-<Image
-  src={ink === 'original' ? original : dim}
-  alt="From Vienna with music"
-  width={width}
-  class={className}
-/>
+<a href="https://phonicscore.com" class:list={['from-vienna', className]} style={`--from-vienna-width: ${width}px`}>
+  <Image src={ink === 'original' ? original : dim} alt="PhonicScore: From Vienna with music" width={width} />
+</a>
+
+<style is:global>
+  /* In the base layer and without specificity: a site's utilities (w-24, a light/dark switch) win. */
+  @layer base {
+    :where(a.from-vienna) {
+      display: inline-block;
+      width: var(--from-vienna-width);
+    }
+    :where(a.from-vienna > img) {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+  }
+</style>

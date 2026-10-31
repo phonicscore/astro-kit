@@ -5,6 +5,17 @@ Versions are git tags, and follow semver: patch = fixes, minor = features
 own code. Sites depend on `#semver:^1.0.0`, so every patch and minor reaches
 them on `npm update` and no major ever does by surprise.
 
+## 1.10.0 — 2026-10-31
+
+- **`FromVienna` links to https://phonicscore.com** on every site (Thomas,
+  2026-10-31). `class` now goes on the link instead of the image: a site sizes
+  it as before (`w-24`) and the artwork fills it, and a light/dark switch
+  (uben.music shows both inks) hides the link itself, so no invisible link
+  takes keyboard focus. The rules have no specificity, so a site's classes
+  win; without a class the link is `width` px wide. The alt text names the
+  company: "PhonicScore: From Vienna with music". Each site links "PhonicScore
+  GmbH" in its own footer to the same address.
+
 ## 1.9.0 — 2026-10-29
 
 - **`track()` sends custom events to Usermaven** (`lib/track.js`), for goals
