@@ -24,12 +24,15 @@ already wired to the kit.
 | Helpers | `…/lib/og.js`, `…/lib/i18n.js` | OG-card slugs; UI-string translator and locale-from-path |
 | Contact Worker | `…/worker/contact.ts` + `schema.sql` | POST handler: honeypot, Turnstile, rate limit, D1 log, Resend delivery |
 | Family palette | `…/styles/family.css`, `…/styles/themes/<product>.css` | opt-in: the stage every .music site shares, the four product keys, and each product's curtain and light |
+| Dark mode | `…/components/ThemeHead.astro`, `ThemeToggle.astro`, `…/lib/score-scheme.js` | opt-in: light or dark before the first paint (the visitor's pick, else the system), the header toggle, OSMD scores in the site's dark tokens |
+| Languages | `…/components/LanguageMenu.astro`, `…/worker/language.ts` | opt-in: the header's language menu (a pick is kept in the `lang` cookie) and the Worker that sends each visitor to their language |
 
 Deliberately **not** in the kit: headers, footers, page templates and copy.
 Each site owns its pages; the kit owns the plumbing. The one look that lives
 here is the .music family palette, because several sites share it: a change
 to it should reach phonicscore.com and the product site together. It reaches
-a site only through an explicit import.
+a site only through an explicit import. The dark mode and language parts are
+the behaviour and markup of two header controls; how they look is the site's.
 
 ## Using it
 
@@ -159,6 +162,173 @@ phonicscore({
   `SeoHead` as well, or the pages point at cards nobody draws. The reverse is
   safe: a page whose `SeoHead` has `ogImages={false}` gets no card drawn.
 
+## Dark mode and languages
+
+Every new PhonicScore site gets the dark mode and the language menu of
+musicxml.tools (Thomas, 2026-11-02), so these live here once: one
+implementation and one Safari fix for musicxml.tools, opensheetmusicdisplay.org
+and opensheetmusiceducation.org. All parts are opt-in, by import. The kit owns
+what makes them work; the site passes everything that varies: the labels in
+the page's language, its languages and the link to each, the paper colour per
+mode, its tokens and the look of the two controls.
+
+### Dark mode
+
+The mode is `data-theme` on `<html>`: the visitor's pick from the toggle,
+kept in localStorage `theme` only while it differs from the system, else the
+system setting. `ThemeHead` sets it before the first paint, so put it in
+`<head>` right after the viewport meta:
+
+```astro
+---
+import ThemeHead from '@phonicscore/astro-kit/components/ThemeHead.astro';
+---
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<ThemeHead themeColor={{ light: '#fbf9f6', dark: '#181614' }} />
+```
+
+`themeColor` is the page's ground in each mode, for the browser's own bars
+(`theme-color`). The site's global.css holds both modes on the same attribute,
+plus a `dark:` variant that follows it:
+
+```css
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+@layer base {
+  :root[data-theme='dark'] {
+    color-scheme: dark;
+    --color-paper: #181614;
+    --color-ink: #efe9e0;
+    --color-score: #211e1b; /* the ground under scores on screen */
+  }
+}
+```
+
+The toggle goes in the header, in the site's look:
+
+```astro
+---
+import ThemeToggle from '@phonicscore/astro-kit/components/ThemeToggle.astro';
+---
+<ThemeToggle label={t('theme.label')} classes={{ button: 'pill w-[2.2rem] justify-center p-0', icon: 'size-[1.1rem]' }} />
+```
+
+| Prop | | |
+|---|---|---|
+| `label` | required | "Dark mode" in the page's language. The button is a switch: pressed in dark mode |
+| `classes.button` | none | the button's look |
+| `classes.icon` | 1.1rem | the size of the moon and the sun. Which one shows is the kit's |
+
+Scores on screen follow with `lib/score-scheme.js`: in dark mode OSMD draws
+in the site's `--color-ink` on its `--color-score` (other token names as
+`scoreScheme({ ink, ground })`), and `onSchemeChange` calls back when the mode
+changes, so an open score can draw again. Scores for paper (print previews,
+downloads) leave it out.
+
+```ts
+import { scoreScheme, onSchemeChange } from '@phonicscore/astro-kit/lib/score-scheme.js';
+
+const osmd = new OpenSheetMusicDisplay(container, { ...options, ...scoreScheme() });
+onSchemeChange(() => {
+  osmd.setOptions(scoreScheme());
+  osmd.render();
+});
+```
+
+### Language menu
+
+English (or the site's default language) at the root, every other language
+under its own prefix with the same paths: `/viewer/` in German is
+`/de/viewer/`. The site knows its paths, so it passes each language with the
+link to the same page in it, or to that language's home page where the page
+doesn't exist (a blog in English only):
+
+```astro
+---
+import LanguageMenu from '@phonicscore/astro-kit/components/LanguageMenu.astro';
+
+const languages = locales.map((l) => ({
+  code: l, // the path prefix and the `lang` cookie's value: "de"
+  name: localeInfo[l].name, // in itself: "Deutsch"
+  lang: localeInfo[l].htmlLang, // "de", "zh-Hans"
+  hreflang: localeInfo[l].hreflang,
+  href: localizePath(pageLanguages.includes(l) ? basePath(Astro.url.pathname) : '/', l),
+}));
+---
+<LanguageMenu
+  languages={languages}
+  current={locale}
+  label={t('lang.label')}
+  classes={{
+    summary: 'pill gap-1.5 max-sm:w-[2.2rem] max-sm:justify-center max-sm:p-0',
+    icon: 'size-[1.05rem] shrink-0',
+    name: 'max-sm:sr-only',
+    list: 'mt-2 min-w-[10.5rem] rounded-xl border border-line-strong bg-surface p-1.5 shadow-lg',
+    link: 'rounded-lg px-3 py-2 text-[0.85rem] text-ink hover:bg-surface-deep aria-[current]:font-semibold',
+  }}
+/>
+```
+
+| Prop | | |
+|---|---|---|
+| `languages` | required | `{ code, name, lang, hreflang, href }` per language, in the menu's order |
+| `current` | required | the page's language: its name shows in the summary, its link is `aria-current` |
+| `label` | required | "Language" in the page's language, read out before the current one |
+| `classes` | none | `menu`, `summary`, `icon` (1.05rem without it), `name` (the current language's name; `max-sm:sr-only` leaves only the globe on phones), `list`, `link` |
+
+The kit's own rules only make it a menu: the list drops down at the right
+edge over the page, the summary has no disclosure triangle, the links are
+blocks without an underline. They sit in the components layer and have no
+specificity, so any class the site passes wins.
+
+A pick goes into the `lang` cookie for a year, and the link keeps the page's
+query and hash. Escape, a click elsewhere and tabbing out close the menu.
+**Safari never focuses a link on a click or tap**: pressing one moves focus to
+nothing (`focusout` with `relatedTarget` null). So the menu closes only when
+focus moves to an element outside it; closing on "focus left" hid the link
+before the click landed, and the menu was dead in Safari from 2026-10-29 to
+2026-10-31 on musicxml.tools. Chrome focuses the link, so check click and tap
+changes in Playwright's WebKit too, not only in Chrome.
+
+### Language Worker
+
+`worker/language.ts` sends each visitor to their language before any HTML
+goes out: the `lang` cookie always wins; without one, a page in the default
+language redirects to the first language of the browser's Accept-Language
+that the site has; a page under a prefix is never redirected by the browser's
+languages. Clicks within the site (Sec-Fetch-Site same-origin, else the
+Referer), crawlers and link previews are never redirected, and neither is a
+page that doesn't exist in the target language (it asks ASSETS first). The
+redirect is a 302 that no cache keeps.
+
+```ts
+// worker/index.ts
+import { createLanguageRedirect } from '@phonicscore/astro-kit/worker/language.ts';
+import { locales, defaultLocale } from '../src/i18n/locales';
+
+const languageRedirect = createLanguageRedirect({ locales, defaultLocale });
+
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    // …the site's own routes first
+    return (await languageRedirect(request, env)) ?? env.ASSETS.fetch(request);
+  },
+};
+```
+
+`locales` is every language with the default one; `defaultLocale` (served at
+the root) defaults to the first. The Worker has to see pages before the static
+assets do: `"run_worker_first": ["/*", "!/_astro/*", …]` in `wrangler.jsonc`,
+leaving out the folders that hold only files. `astro dev` runs no Worker:
+test the redirect with `wrangler dev` on a build. Headless Chrome's user agent
+says "HeadlessChrome" and counts as a bot, so give it a normal one when
+testing redirects.
+
+The site's privacy policy names both: `theme` in localStorage (only while the
+pick differs from the system) and the `lang` cookie (a year, set only by a
+pick in the menu). musicxml.tools has wording Thomas approved (2026-10-29).
+
 ## How changes reach the sites
 
 1. Change the kit, add a line to `CHANGELOG.md`, bump `version` in `package.json`.
@@ -269,3 +439,15 @@ ci/compare.sh <site>/before <site>/after out
   the developer's machine and is gitignored here as a second line of defence.
 - **Keep the preset's defaults safe to receive unattended.** Anything that could
   change a site's output in a surprising way should be opt-in.
+- **Words in `components/` are Tailwind classes for every site.** `base.css`
+  scans `../components` so the kit's own utilities get generated, and the
+  scanner reads every word there, comments and CSS included: "flex-shrink" in
+  a style block or "inline" in a comment adds a rule to every site's CSS,
+  whether it uses the component or not. A component's own CSS goes in its
+  `<style is:global>`, in the components layer with `:where()`, so only pages
+  that render it get it and any site class beats it. Before a release, list
+  what the change adds: Tailwind's `Scanner` (`@tailwindcss/oxide`) over the
+  old and new `components/`, then the new candidates through each site's
+  design system (`__unstable__loadDesignSystem` from `@tailwindcss/node` with
+  its global.css, `candidatesToCss`). 1.11.0 adds only `sr-only`, which every
+  site uses already.

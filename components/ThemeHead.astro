@@ -1,0 +1,46 @@
+---
+/**
+ * Light or dark before the first paint, for a site with a dark mode. Place it
+ * in <head>, right after the viewport meta. Its script runs right there and
+ * sets data-theme on <html>: the visitor's pick from ThemeToggle (localStorage
+ * `theme`), else the system setting. It points the color-scheme and
+ * theme-color metas at that mode too, so form controls, scrollbars and the
+ * browser's own bars match the page from the start.
+ *
+ * The site's tokens read the attribute. Its global.css holds both modes and a
+ * dark variant on the same attribute:
+ *
+ *   @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+ *   @layer base {
+ *     :root[data-theme='dark'] { color-scheme: dark; --color-paper: #181614; ... }
+ *   }
+ *
+ * `themeColor` is the page's ground in each mode. The theme-color meta keeps
+ * both values in data attributes, so the toggle's script (lib/theme.js)
+ * switches the bars along with the page and no second copy of the colours is
+ * needed. The script has no expressions: Astro emits script content as raw
+ * text, so it reads the colours from the meta instead.
+ */
+interface Props {
+  /** The page's ground in light and dark mode: the colour of the browser's own bars (theme-color). */
+  themeColor: { light: string; dark: string };
+}
+
+const { themeColor } = Astro.props;
+---
+
+<meta name="color-scheme" content="light" />
+<meta name="theme-color" content={themeColor.light} data-light={themeColor.light} data-dark={themeColor.dark} />
+<script is:inline>
+  (() => {
+    let theme = null;
+    try {
+      theme = localStorage.getItem('theme');
+    } catch {}
+    if (theme !== 'light' && theme !== 'dark') theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    document.documentElement.dataset.theme = theme;
+    document.querySelector('meta[name="color-scheme"]').content = theme;
+    const bars = document.querySelector('meta[name="theme-color"]');
+    bars.content = bars.dataset[theme];
+  })();
+</script>

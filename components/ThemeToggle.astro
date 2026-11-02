@@ -1,0 +1,79 @@
+---
+/**
+ * The light and dark toggle for a site's header: a moon in light mode, a sun
+ * in dark mode. The page follows the system setting until the visitor picks
+ * the other mode here (lib/theme.js); ThemeHead has to be in the page's head.
+ * Screen readers hear `label` ("Dark mode", in the page's language) and
+ * whether it is on: the button is pressed in dark mode.
+ *
+ * The look is the site's: `classes.button` styles the button, `classes.icon`
+ * sizes the two icons (1.1rem without it). Which icon shows follows data-theme
+ * in the kit's own rules, so the site needs no dark variant for it. Those rules
+ * have no specificity and sit in the components layer: above Tailwind's
+ * reset, below anything the site writes.
+ */
+interface Props {
+  /** "Dark mode" in the page's language. */
+  label: string;
+  classes?: { button?: string; icon?: string };
+}
+
+const { label, classes = {} } = Astro.props;
+---
+
+<button type="button" class={classes.button} data-theme-toggle aria-pressed="false" aria-label={label}>
+  <svg
+    class={classes.icon}
+    data-theme-icon="moon"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M20.5 14.2A8.5 8.5 0 1 1 9.8 3.5a6.8 6.8 0 0 0 10.7 10.7Z"></path>
+  </svg>
+  <svg
+    class={classes.icon}
+    data-theme-icon="sun"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    aria-hidden="true"
+  >
+    <circle cx="12" cy="12" r="4.2"></circle>
+    <path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"></path>
+  </svg>
+</button>
+
+<style is:global>
+  /* Tailwind's own order, in case this sheet comes first: a layer named here
+     first would otherwise rank below the ones Tailwind names after it. */
+  @layer theme, base, components, utilities;
+
+  @layer components {
+    :where([data-theme-toggle]) {
+      cursor: pointer;
+    }
+    :where([data-theme-toggle] > svg) {
+      display: block;
+      width: 1.1rem;
+      height: 1.1rem;
+    }
+    :where([data-theme-toggle] > [data-theme-icon='sun']),
+    :where([data-theme='dark'] [data-theme-toggle] > [data-theme-icon='moon']) {
+      display: none;
+    }
+    :where([data-theme='dark'] [data-theme-toggle] > [data-theme-icon='sun']) {
+      display: block;
+    }
+  }
+</style>
+
+<script>
+  import '../lib/theme.js';
+</script>

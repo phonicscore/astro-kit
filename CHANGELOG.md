@@ -5,6 +5,74 @@ Versions are git tags, and follow semver: patch = fixes, minor = features
 own code. Sites depend on `#semver:^1.0.0`, so every patch and minor reaches
 them on `npm update` and no major ever does by surprise.
 
+## 1.11.0 — 2026-11-02
+
+Dark mode and the language menu of musicxml.tools, as opt-in parts. Thomas
+decided on 2026-11-02 that every new PhonicScore site gets both (OSME
+relaunch plan, decision 9). musicxml.tools, the opensheetmusicdisplay.org
+relaunch and opensheetmusiceducation.org each carried a copy; now they share
+one implementation and one Safari fix. What varies per site is a parameter:
+the labels, the languages and their links, the paper colour per mode, the
+tokens and the look. README, "Dark mode and languages".
+
+- **`components/ThemeHead.astro`**: light or dark before the first paint. Its
+  script in the head sets `data-theme` on `<html>` from the visitor's pick
+  (localStorage `theme`), else the system setting, and points the
+  `color-scheme` and `theme-color` metas at that mode. `themeColor` takes the
+  page's ground in each mode; the meta keeps both values, so the toggle needs
+  no second copy of them.
+- **`components/ThemeToggle.astro`** with **`lib/theme.js`**: the header's
+  moon and sun. The pick is kept only while it differs from the system;
+  toggling back follows the system again, and other open tabs follow.
+  `label` is "Dark mode" in the page's language; `classes` the look. The kit
+  shows the right icon by `data-theme`, so a site needs no dark variant for it.
+- **`lib/score-scheme.js`**: `scoreScheme()` gives OSMD its dark mode in the
+  site's `--color-ink` on its `--color-score` (other names as options),
+  `onSchemeChange()` calls back when the mode changes.
+- **`components/LanguageMenu.astro`** with **`lib/language-menu.js`**: the
+  header's language menu, a disclosure with one link per language, each named
+  in itself. The site passes the languages with their links, the current one
+  and the label. A pick goes into the `lang` cookie for a year, query and hash
+  stay. With the Safari fix from musicxml.tools (4f7b349, 2026-10-31): Safari
+  never focuses a link on a click or tap, so the menu closes only when focus
+  moves to an element outside it, and on `pagehide`.
+- **`worker/language.ts`**: `createLanguageRedirect({ locales, defaultLocale })`,
+  the redirect to the visitor's language before any HTML goes out. The `lang`
+  cookie wins, else the browser's first language the site has, on pages in the
+  default language only; never for clicks within the site, crawlers, link
+  previews or a page missing in that language. The cookie may now hold any of
+  the site's codes, not only two letters, for a later `zh-hant`.
+- The components carry their own few rules (`<style is:global>`, components
+  layer, `:where()`), so only pages that render them get them, and every site
+  class wins over them.
+
+What a site sees on update: nothing until it imports a part. No site gains a
+CSS rule either: Tailwind scans the kit's `components/` for every site, and
+the only utility the new files name is `sr-only`, which all seven sites use
+already (checked with Tailwind's scanner against each site's own theme).
+musicxml.tools, unchanged, builds byte for byte the same on 1.11.0 as on
+1.10.0 (699 files).
+
+Verified with musicxml.tools switched to the parts (its branch
+`kit-dark-mode-and-languages`), against its main on 1.10.0:
+
+- all 312 pages as full-page screenshots at 1280 and 390 px, in light and in
+  dark: no difference (`ci/visual-diff.mjs`, which also compares metadata,
+  console errors and the 350 other files);
+- the header in 200 states (menu closed and open, hover, keyboard focus;
+  Chromium and WebKit, desktop and phone, light and dark): the same pixels and
+  every computed style of every element the same;
+- 56 checks of the menu and the toggle in WebKit and Chrome, desktop by mouse
+  and phone by touch, the same on both: all nine picks with query and hash,
+  the English-only blog, a press elsewhere, Escape, Tab through and out, Enter
+  on a link, Back, the toggle and its storage, the system switch, a second tab;
+- the viewer's and the player's score in dark, toggled to light and back:
+  the same pixels;
+- the language Worker in `wrangler dev`: 46 requests, the same status,
+  Location, Cache-Control and Vary;
+- the HTML of all 312 pages differs in 8 kinds of change, all in the two
+  controls and the theme head; `astro check` 0 errors, build clean.
+
 ## 1.10.0 — 2026-10-31
 
 - **`FromVienna` links to https://phonicscore.com** on every site (Thomas,

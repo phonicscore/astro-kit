@@ -1,0 +1,124 @@
+---
+/**
+ * The language menu for a site's header: a disclosure (details and summary)
+ * with one link per language, each language named in itself. Choosing one
+ * keeps it in the `lang` cookie for a year (lib/language-menu.js), and the
+ * language Worker (worker/language.ts) opens the site in it from then on: the
+ * pick always wins over the browser's languages. The links work without
+ * JavaScript too.
+ *
+ * The site knows its paths, so it passes the links: each language's `href` is
+ * the same page in that language, or that language's home page where the page
+ * doesn't exist in it (a blog in English only). `current` is the page's own
+ * language: its name shows in the summary, and its link is aria-current.
+ *
+ * The look is the site's, through `classes`. The kit's rules only make it a
+ * menu: the list drops down at the right edge over the page, the summary has
+ * no disclosure triangle, the links are blocks without an underline, and the
+ * globe is 1.05rem unless `classes.icon` sizes it. Those rules have no
+ * specificity and sit in the components layer: above Tailwind's reset, below
+ * anything the site writes.
+ */
+interface Language {
+  /** The language's code, as the `lang` cookie and the Worker know it: "de". */
+  code: string;
+  /** The language's name in itself: "Deutsch". */
+  name: string;
+  /** The `lang` of that name, so screen readers say it in its language: "de", "zh-Hans". */
+  lang: string;
+  /** The link's hreflang: "de". */
+  hreflang: string;
+  /** The same page in that language, else that language's home page. */
+  href: string;
+}
+
+interface Props {
+  /** Every language of the site, in the menu's order. */
+  languages: readonly Language[];
+  /** The page's language: one of the codes in `languages`. */
+  current: string;
+  /** "Language" in the page's language, read out before the current one. */
+  label: string;
+  classes?: { menu?: string; summary?: string; icon?: string; name?: string; list?: string; link?: string };
+}
+
+const { languages, current, label, classes = {} } = Astro.props;
+const page = languages.find((l) => l.code === current) ?? languages[0];
+---
+
+<details class={classes.menu} data-language-menu>
+  <summary class={classes.summary}>
+    <svg
+      class={classes.icon}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.8"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="9"></circle>
+      <path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3Z"></path>
+    </svg>
+    <span class="sr-only">{label}: </span>
+    <span lang={page.lang} class={classes.name}>{page.name}</span>
+  </summary>
+  <ul class={classes.list}>
+    {
+      languages.map((l) => (
+        <li>
+          <a
+            href={l.href}
+            hreflang={l.hreflang}
+            lang={l.lang}
+            data-language={l.code}
+            aria-current={l.code === current ? 'true' : undefined}
+            class={classes.link}
+          >
+            {l.name}
+          </a>
+        </li>
+      ))
+    }
+  </ul>
+</details>
+
+<style is:global>
+  /* Tailwind's own order, in case this sheet comes first: a layer named here
+     first would otherwise rank below the ones Tailwind names after it. */
+  @layer theme, base, components, utilities;
+
+  @layer components {
+    :where([data-language-menu]) {
+      position: relative;
+    }
+    :where([data-language-menu] > summary) {
+      cursor: pointer;
+      list-style-type: none;
+    }
+    :where([data-language-menu] > summary)::-webkit-details-marker {
+      display: none;
+    }
+    :where([data-language-menu] > summary > svg) {
+      width: 1.05rem;
+      height: 1.05rem;
+    }
+    :where([data-language-menu] > ul) {
+      position: absolute;
+      right: 0;
+      z-index: 30;
+      margin: 0;
+      padding: 0;
+      list-style-type: none;
+    }
+    :where([data-language-menu] a) {
+      display: block;
+      text-decoration-line: none;
+    }
+  }
+</style>
+
+<script>
+  import '../lib/language-menu.js';
+</script>
