@@ -19,7 +19,8 @@
  * Pages render offline: only the two local servers answer, and every other
  * request (analytics, Turnstile, checkout scripts) is aborted on both sides.
  * Motion is reduced and animations are stopped, so a page renders the same
- * frame each time.
+ * frame each time, and random numbers repeat, so a page that draws something
+ * random on load draws the same thing on both sides.
  *
  * Writes <out-dir>/report.md and report.json, plus before, after and diff PNGs
  * for every screenshot that differs. Exit code 0: no difference; 1:
@@ -182,6 +183,38 @@ function comparePngs(a, b) {
 }
 
 /**
+ * Runs in every document before its own scripts, and is serialised into the
+ * page, so it can use nothing from this file. The numbers start over in each
+ * document, the same on both sides.
+ *
+ * A real generator and not a constant: code that draws until it gets a new
+ * value still ends. Math.random and getRandomValues draw from separate
+ * streams, so a library that starts calling one does not shift the other.
+ * The native getRandomValues still runs first, for its argument checks.
+ * Web workers keep real randomness: an init script does not reach them, and
+ * no site's worker draws anything on the page.
+ */
+function repeatableRandom() {
+  // mulberry32, a 32-bit integer per call.
+  const stream = (/** @type {number} */ seed) => () => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return (t ^ (t >>> 14)) >>> 0;
+  };
+  const float = stream(1);
+  Math.random = () => float() / 2 ** 32;
+  const byte = stream(2);
+  const fill = Crypto.prototype.getRandomValues;
+  Crypto.prototype.getRandomValues = function getRandomValues(array) {
+    const filled = fill.call(this, array);
+    const bytes = new Uint8Array(filled.buffer, filled.byteOffset, filled.byteLength);
+    for (let i = 0; i < bytes.length; i++) bytes[i] = byte() >>> 24;
+    return filled;
+  };
+}
+
+/**
  * One browser context per build and width. Only the build's own server
  * answers; everything else is aborted, so third-party scripts cannot make
  * the two sides differ.
@@ -197,6 +230,7 @@ async function contextFor(browser, viewport) {
     locale: 'en-US',
     timezoneId: 'Europe/Vienna',
   });
+  await context.addInitScript(repeatableRandom);
   await context.route('**/*', (route) =>
     new URL(route.request().url()).hostname === '127.0.0.1' ? route.continue() : route.abort(),
   );

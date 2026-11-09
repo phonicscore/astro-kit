@@ -378,7 +378,8 @@ that makes `npm ci` fail, so a lockfile has to pass `npm ci` here before it
 can ship. Then `ci/visual-diff.mjs` compares the two builds:
 
 - every page as a full-page screenshot at 1280 px and 390 px, pixel by pixel,
-  rendered offline with motion reduced;
+  rendered offline with motion reduced and random numbers that repeat, so a
+  page that draws something random on load compares as the same;
 - every page's metadata (title, meta tags, canonical and alternate links,
   JSON-LD);
 - console errors and exceptions that only the new build throws;
