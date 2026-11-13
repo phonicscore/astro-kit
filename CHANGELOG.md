@@ -5,6 +5,19 @@ Versions are git tags, and follow semver: patch = fixes, minor = features
 own code. Sites depend on `#semver:^1.0.0`, so every patch and minor reaches
 them on `npm update` and no major ever does by surprise.
 
+## 1.11.1 — 2026-11-13
+
+- **Focus ring on `summary`** (`styles/base.css`): the base ring covered `a`,
+  `button`, `input`, `textarea`, `select` and `[tabindex]`, not `summary`. So
+  the LanguageMenu's button, and any other `<details>` toggle, showed the
+  browser's thin default ring on every kit site instead of the site's 3 px
+  accent ring. Found in the opensheetmusiceducation.org pre-switch check
+  (2026-11-13). The default ring was visible, so axe passed either way; now it
+  matches every other control. Same layer and zero specificity as before, so a
+  site's own focus classes still win; no site gains a utility.
+  opensheetmusiceducation.org carries the same rule in its `global.css` until
+  it takes 1.11.1 (site PR #15), then drops it.
+
 ## 1.11.0 — 2026-11-02
 
 Dark mode and the language menu of musicxml.tools, as opt-in parts. Thomas
