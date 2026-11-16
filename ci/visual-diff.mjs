@@ -12,15 +12,17 @@
  *   and the JSON-LD anywhere on the page.
  * - console errors and exceptions that only the new build throws.
  * Every other file outside _astro/ (sitemaps, robots.txt, llms.txt, _headers,
- * share cards, fonts, images) is compared byte for byte, PNGs pixel by pixel.
+ * share cards, fonts, images) is compared byte for byte, PNGs pixel by pixel,
+ * iCalendar files without their DTSTAMP line.
  * _astro/ holds the bundles under content-hashed names that change with any
  * compiler update; what they do shows in the screenshots.
  *
  * Pages render offline: only the two local servers answer, and every other
  * request (analytics, Turnstile, checkout scripts) is aborted on both sides.
- * Motion is reduced and animations are stopped, so a page renders the same
- * frame each time, and random numbers repeat, so a page that draws something
- * random on load draws the same thing on both sides.
+ * Motion is reduced, animations are stopped and animated images show their
+ * first frame, so a page renders the same frame each time, and random numbers
+ * repeat, so a page that draws something random on load draws the same thing
+ * on both sides.
  *
  * Writes <out-dir>/report.md and report.json, plus before, after and diff PNGs
  * for every screenshot that differs. Exit code 0: no difference; 1:
@@ -168,6 +170,13 @@ function metadataOf(html) {
   return lines.map(unhash);
 }
 
+/**
+ * An iCalendar file without its DTSTAMP: that line is the moment the file was
+ * written, which for a static site is the build, so it differs between any
+ * two builds and tells a visitor nothing.
+ */
+const withoutStamp = (/** @type {Buffer} */ ics) => ics.toString('utf8').replace(/^DTSTAMP[;:].*$/gm, 'DTSTAMP');
+
 /** Two PNGs: `null` if they match, else what differs and the diff image. */
 function comparePngs(a, b) {
   const A = PNG.sync.read(a);
@@ -215,6 +224,74 @@ function repeatableRandom() {
 }
 
 /**
+ * Whether an image file may have more than one frame, from its header: a
+ * WebP or PNG that says it is animated, an AVIF image sequence, any GIF
+ * (rare, and the header does not say). Astro turns an animated GIF into an
+ * animated WebP, so the file name says nothing.
+ */
+function mayBeAnimated(/** @type {Buffer} */ file) {
+  const text = (/** @type {number} */ start, /** @type {number} */ end) => file.toString('latin1', start, end);
+  if (file.length < 32) return false;
+  if (text(0, 4) === 'GIF8') return true;
+  if (text(0, 4) === 'RIFF' && text(8, 12) === 'WEBP') return text(12, 16) === 'VP8X' && (file[20] & 0x02) !== 0;
+  if (text(1, 4) === 'PNG') {
+    const actl = file.indexOf('acTL');
+    return actl !== -1 && actl < file.indexOf('IDAT');
+  }
+  if (text(4, 8) === 'ftyp') return text(8, file.readUInt32BE(0)).includes('avis');
+  return false;
+}
+
+/**
+ * Swaps every animated image for a still of its first frame. Such an image
+ * keeps playing whatever the CSS says, so two screenshots catch whichever
+ * frames happen to be up. `paths` are the files mayBeAnimated() picked; the
+ * decoder has the last word. Pages without one are shot as before.
+ *
+ * Runs in the page, so it can use nothing from this file. The still keeps the
+ * image's natural size, so the layout does not move. An image it cannot read
+ * is left as it is: at worst it shows up in the report.
+ */
+async function stillImages(/** @type {string[]} */ paths) {
+  if (!('ImageDecoder' in window)) return;
+  await Promise.all(
+    [...document.images].map(async (img) => {
+      if (!img.currentSrc || !img.naturalWidth) return;
+      if (!paths.includes(decodeURIComponent(new URL(img.currentSrc).pathname))) return;
+      try {
+        const response = await fetch(img.currentSrc);
+        const type = response.headers.get('content-type') ?? '';
+        if (!/^image\/(gif|webp|png|avif)$/.test(type) || !(await ImageDecoder.isTypeSupported(type))) return;
+        const decoder = new ImageDecoder({ data: await response.arrayBuffer(), type });
+        try {
+          await decoder.tracks.ready;
+          if (!decoder.tracks.selectedTrack?.animated) return;
+          const { image } = await decoder.decode({ frameIndex: 0 });
+          const canvas = document.createElement('canvas');
+          canvas.width = image.displayWidth;
+          canvas.height = image.displayHeight;
+          canvas.getContext('2d')?.drawImage(image, 0, 0);
+          image.close();
+          // The still is the only candidate, at the pixel density the frames
+          // had (a `w` descriptor makes it anything but 1), so its natural
+          // size stays what it was.
+          const density = canvas.width / img.naturalWidth;
+          img.closest('picture')?.querySelectorAll('source').forEach((source) => source.remove());
+          img.removeAttribute('sizes');
+          img.removeAttribute('src');
+          img.srcset = `${canvas.toDataURL()} ${density}x`;
+          await img.decode();
+        } finally {
+          decoder.close();
+        }
+      } catch {
+        // Left playing.
+      }
+    }),
+  );
+}
+
+/**
  * One browser context per build and width. Only the build's own server
  * answers; everything else is aborted, so third-party scripts cannot make
  * the two sides differ.
@@ -238,7 +315,7 @@ async function contextFor(browser, viewport) {
 }
 
 /** @returns {Promise<Shot>} */
-async function shoot(context, origin, url) {
+async function shoot(context, origin, url, /** @type {string[]} */ animated) {
   const page = await context.newPage();
   const errors = [];
   const local = (/** @type {string} */ s) => s.replaceAll(origin, '');
@@ -264,6 +341,7 @@ async function shoot(context, origin, url) {
       await document.fonts.ready;
       await Promise.all([...document.images].map((img) => img.decode().catch(() => {})));
     });
+    if (animated.length) await page.evaluate(stillImages, animated);
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
     await page.waitForTimeout(300);
     const png = await page.screenshot({ fullPage: true, animations: 'disabled', caret: 'hide' });
@@ -310,6 +388,7 @@ async function main() {
     otherFiles++;
     const [a, b] = await Promise.all([readFile(path.join(BEFORE, file)), readFile(path.join(AFTER, file))]);
     if (a.equals(b)) continue;
+    if (file.endsWith('.ics') && withoutStamp(a) === withoutStamp(b)) continue;
     const changed = file.endsWith('.png') ? comparePngs(a, b) : { what: 'content changed' };
     if (changed) differences.push({ page: file, what: changed.what });
   }
@@ -329,6 +408,16 @@ async function main() {
   }
 
   // Screenshots and console errors.
+  /** @type {Set<string>} */
+  const animatedPaths = new Set();
+  for (const [root, list] of /** @type {const} */ ([[BEFORE, beforeFiles], [AFTER, afterFiles]])) {
+    for (const file of list) {
+      if (/\.(gif|webp|png|apng|avif)$/i.test(file) && mayBeAnimated(await readFile(path.join(root, file)))) {
+        animatedPaths.add(`/${file}`);
+      }
+    }
+  }
+  const animated = [...animatedPaths];
   const [beforeServer, afterServer] = await Promise.all([serve(BEFORE), serve(AFTER)]);
   const origin = (server) => `http://127.0.0.1:${server.address().port}`;
   const browser = await chromium.launch();
@@ -345,7 +434,10 @@ async function main() {
     await pool(jobs, CONCURRENCY, async ({ url, viewport }) => {
       const { before, after } = contexts.get(viewport.name);
       const pair = () =>
-        Promise.all([shoot(before, origin(beforeServer), url), shoot(after, origin(afterServer), url)]);
+        Promise.all([
+          shoot(before, origin(beforeServer), url, animated),
+          shoot(after, origin(afterServer), url, animated),
+        ]);
       let [a, b] = await pair();
       let changed = comparePngs(a.png, b.png);
       if (changed) {

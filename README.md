@@ -378,13 +378,15 @@ that makes `npm ci` fail, so a lockfile has to pass `npm ci` here before it
 can ship. Then `ci/visual-diff.mjs` compares the two builds:
 
 - every page as a full-page screenshot at 1280 px and 390 px, pixel by pixel,
-  rendered offline with motion reduced and random numbers that repeat, so a
-  page that draws something random on load compares as the same;
+  rendered offline with motion reduced, animated images (GIF, WebP, PNG,
+  AVIF) on their first frame and random numbers that repeat, so a page that
+  plays or draws something on load compares as the same;
 - every page's metadata (title, meta tags, canonical and alternate links,
   JSON-LD);
 - console errors and exceptions that only the new build throws;
 - every other file outside `_astro/` (sitemaps, robots.txt, llms.txt,
-  `_headers`, share cards), byte for byte.
+  `_headers`, share cards), byte for byte; iCalendar files without their
+  `DTSTAMP` line, which is the time of the build.
 
 If nothing differs, the update is committed to `main`, which deploys the site.
 If anything differs, or the new lockfile does not install or build, the
