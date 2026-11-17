@@ -5,6 +5,47 @@ Versions are git tags, and follow semver: patch = fixes, minor = features
 own code. Sites depend on `#semver:^1.0.0`, so every patch and minor reaches
 them on `npm update` and no major ever does by surprise.
 
+## 1.11.2 — 2026-11-17
+
+- **The language redirect never leaves the site** (`worker/language.ts`). It
+  was an open redirect: for a visitor whose `lang` cookie held the default
+  language, `/de//example.com/` answered 302 with `Location: //example.com/`,
+  which a browser reads as the host example.com. The redirect takes the
+  language prefix off and keeps the rest, here `//example.com/`. Its question
+  to ASSETS, whether that page exists, resolved the rest against the request's
+  URL and so named another host; ASSETS answers by the path alone, `/` exists,
+  and the redirect went out. A cookie for another language, or none, never
+  left the site: those redirects put a prefix in front. Found in the review of
+  the sawti.app Worker (2026-11-16). Now:
+  - an address with an empty segment (`//`) or a backslash is never
+    redirected. It goes on to ASSETS as it is, which sends it to the address
+    with single slashes (307, same site) or shows the 404 page;
+  - a redirect only goes out if its path starts with exactly one slash and
+    holds no backslash;
+  - the question to ASSETS takes the site's origin and sets the new path on
+    it, which cannot change the host.
+
+  No page's redirect changes.
+- **Tests, the kit's first** (`test/language.test.mjs`, `npm test`): Node runs
+  them alone and reads the Worker's TypeScript as it is (22.18 or newer), so
+  nothing has to be installed. `.github/workflows/test.yml` runs them on every
+  pull request and on `main`. 168 addresses of the kind above, each for nine
+  kinds of visitor, with an ASSETS that answers as Workers static assets do
+  and one that says yes to anything: no answer leads off the site. And the
+  redirects the sites rely on, one by one. Against 1.11.1 the four tests about
+  leaving the site fail and the other 35 pass.
+
+What a site sees on update: nothing in its build, because the Worker is not
+part of `dist`. The weekly update takes 1.11.2 as "no visible change", and the
+deploy that follows brings the fix. A site that uses `createLanguageRedirect`
+should not wait for Monday: run its "Dependency update" workflow by hand, or
+`npm update @phonicscore/astro-kit` and deploy.
+
+Verified in the Workers runtime too (wrangler 4.158.0, a small site with the
+sites' `assets` settings, 16 addresses for 4 kinds of visitor, sent with
+`curl --path-as-is`): on 1.11.1 five of the 64 answers led to example.com, on
+1.11.2 none, and the other 59 answers are the same on both.
+
 ## 1.11.1 — 2026-11-13
 
 - **Focus ring on `summary`** (`styles/base.css`): the base ring covered `a`,

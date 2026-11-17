@@ -1,0 +1,25 @@
+# The kit's own tests, on every pull request and on main: `npm test`, which is
+# `node --test` over test/. They use Node alone and read worker/*.ts as it is,
+# so there is nothing to install.
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - run: npm test
