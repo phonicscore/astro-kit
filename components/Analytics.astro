@@ -18,7 +18,12 @@
  * is raw text: an expression such as {`...`} written inside <script> is emitted
  * literally, which leaves the browser a block holding an unused string. Values
  * go in through JSON.stringify with "<" escaped, so they can never close the tag.
+ *
+ * The same script first runs the guard of lib/usermaven-guard.js: Usermaven's
+ * script then stores nothing in the browser, its retry queue stays in memory.
  */
+import { usermavenGuard } from '../lib/usermaven-guard.js';
+
 interface Props {
   usermavenKey: string;
   isProduction: boolean;
@@ -47,4 +52,4 @@ const loader =
   'var f=document.getElementsByTagName("script")[0];f.parentNode.insertBefore(s,f);})();';
 ---
 
-{run && <script is:inline set:html={loader} />}
+{run && <script is:inline set:html={usermavenGuard + loader} />}

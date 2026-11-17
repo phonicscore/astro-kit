@@ -15,7 +15,7 @@ already wired to the kit.
 | Integration preset | `@phonicscore/astro-kit` | astro-icon, the i18n-aware sitemap, SEO/GEO build checks + `llms.txt`, Tailwind v4, the content transforms — one line in `astro.config.mjs` |
 | Share cards | `ogImages` option of the preset | a 1200×630 link-preview PNG for every page at `/og/<slug>.png`, themed per site; on by default |
 | `SeoHead` | `…/components/SeoHead.astro` | title, description, canonical, hreflang, Open Graph + Twitter cards, schema.org graph, favicons |
-| `Analytics` | `…/components/Analytics.astro` | Usermaven, cookieless (no banner), production-only; `src` and `trackingHost` for a proxy on the site's own domain |
+| `Analytics` | `…/components/Analytics.astro` | Usermaven, cookieless (no banner), production-only, nothing kept in the browser's storage; `src` and `trackingHost` for a proxy on the site's own domain |
 | `track()` | `…/lib/track.js` | Usermaven custom events for goals and funnels (a file opened, a result downloaded); does nothing without `Analytics` |
 | `Breadcrumbs`, `Prose` | `…/components/*.astro` | visible breadcrumb trail; the wrapper for rendered Markdown |
 | `FromVienna` | `…/components/FromVienna.astro` | the "From Vienna with music" sign-off for the bottom of every page, a link to https://phonicscore.com: `<FromVienna />` on dark grounds, `<FromVienna ink="original" />` on light ones; `class` sizes the link |
@@ -161,6 +161,17 @@ phonicscore({
 - `ogImages: false` switches the generator off. Pass `ogImages={false}` to
   `SeoHead` as well, or the pages point at cards nobody draws. The reverse is
   safe: a page whose `SeoHead` has `ogImages={false}` gets no card drawn.
+
+## Analytics
+
+Usermaven's script keeps a retry queue for unsent events in localStorage
+(`usermaven_offline_queue_default_data`), and Austrian law (§ 165 (3) TKG 2021)
+allows storing on a visitor's device without consent only what is strictly
+necessary for what the visitor asked for, which a buffer for statistics is not.
+So `Analytics` runs a small guard before the loader (`lib/usermaven-guard.js`,
+Thomas, 2026-11-17): every write to a key starting with `usermaven_` is
+dropped, the queue stays in memory, and entries from earlier visits are
+removed. An event that cannot be sent is lost when the visitor leaves the page.
 
 ## Dark mode and languages
 
@@ -436,9 +447,11 @@ ci/compare.sh <site>/before <site>/after out
 TypeScript as it is (Node 22.18 or newer): nothing has to be installed. They
 run on every pull request and on `main` (`.github/workflows/test.yml`).
 
-So far they cover the language redirect: every redirect the sites rely on, and
-that no address leads off the site. The weekly update compares a site's pages,
-not what its Worker answers, so a Worker's behaviour is checked only here.
+They cover the language redirect (every redirect the sites rely on, and that
+no address leads off the site) and the Usermaven storage guard, run as the
+text the page gets, with a stand-in Storage. The weekly update compares a
+site's pages, not what its Worker answers, so a Worker's behaviour is checked
+only here.
 `test/` is not part of the package a site installs.
 
 ## Rules for this repo
@@ -454,7 +467,9 @@ not what its Worker answers, so a Worker's behaviour is checked only here.
   long words that break), as long as each one only changes what fails WCAG.
   The "From Vienna with music" sign-off links to https://phonicscore.com on
   every site, by Thomas's decision (2026-10-31), and so does "PhonicScore
-  GmbH" in each site's own footer.
+  GmbH" in each site's own footer. Privacy defaults reach every site too
+  (1.12.0, Thomas's decision of 2026-11-17): Usermaven's script stores
+  nothing in the visitor's browser (see "Analytics").
 - **No Tailwind Plus code — ever.** This repository is public. The Tailwind Plus
   licence covers using its components in our own projects, not redistributing
   them — and a public package is redistribution. Components built from a
