@@ -10,6 +10,13 @@
  * og:image points at /og/<slug>.png — the share card the kit draws for this page
  * after the build, with og:image:alt as its title (see `ogImages` in the kit's
  * integration options).
+ *
+ * og:type is "website" unless the page says `ogType="article"`. An article
+ * can add `article` (published and modified time, authors, section, tags);
+ * they become the article:* tags, and only together with `ogType="article"`.
+ * Times are ISO 8601 strings, or Date objects, which become toISOString().
+ * The first author also becomes <meta name="author">. Pass the same values
+ * the page's schema.org Article node uses, so the two never disagree.
  */
 import Seo from '@jdevalk/astro-seo-graph/Seo.astro';
 import { ogSlug } from '../lib/og.js';
@@ -19,6 +26,20 @@ interface Alternate {
   hreflang: string;
   /** Absolute or site-relative URL of that language's version */
   href: string;
+}
+
+/** Open Graph article data; the names are those of @jdevalk/astro-seo-graph. */
+interface ArticleMeta {
+  /** article:published_time, e.g. the Article node's datePublished. */
+  publishedTime?: string | Date;
+  /** article:modified_time, e.g. the Article node's dateModified. */
+  modifiedTime?: string | Date;
+  /** article:author, one tag each (profile URLs or names); the first is also <meta name="author">. */
+  authors?: string[];
+  /** article:section */
+  section?: string;
+  /** article:tag, one tag each. */
+  tags?: string[];
 }
 
 interface Props {
@@ -41,6 +62,10 @@ interface Props {
   twitterSite?: string;
   /** false to leave og:image out (e.g. when the kit's cards are switched off). */
   ogImages?: boolean;
+  /** og:type; "website" when left out. */
+  ogType?: 'website' | 'article';
+  /** The article:* tags; used only with ogType="article". */
+  article?: ArticleMeta;
 }
 
 const {
@@ -56,6 +81,8 @@ const {
   noindex = false,
   twitterSite,
   ogImages = true,
+  ogType,
+  article,
 } = Astro.props;
 
 const canonical = new URL(Astro.url.pathname, siteUrl).href;
@@ -86,6 +113,8 @@ const seoAlternates = {
   graph={graph}
   alternates={seoAlternates}
   noindex={noindex}
+  ogType={ogType}
+  article={ogType === 'article' ? article : undefined}
   extraLinks={[
     { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
     { rel: 'sitemap', href: '/sitemap-index.xml' },
