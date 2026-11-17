@@ -266,7 +266,8 @@ Scores on screen follow with `lib/score-scheme.js`: in dark mode OSMD draws
 in the site's `--color-ink` on its `--color-score` (other token names as
 `scoreScheme({ ink, ground })`), and `onSchemeChange` calls back when the mode
 changes, so an open score can draw again. Scores for paper (print previews,
-downloads) leave it out.
+downloads) leave it out. A score on a page that scrolls has two more rules:
+see [OSMD on a kit site](#osmd-on-a-kit-site).
 
 ```ts
 import { scoreScheme, onSchemeChange } from '@phonicscore/astro-kit/lib/score-scheme.js';
@@ -379,6 +380,86 @@ testing redirects.
 The site's privacy policy names both: `theme` in localStorage (only while the
 pick differs from the system) and the `lang` cookie (a year, set only by a
 pick in the menu). musicxml.tools has wording Thomas approved (2026-10-29).
+
+## OSMD on a kit site
+
+The kit draws no scores, but several sites put
+[OpenSheetMusicDisplay](https://github.com/opensheetmusicdisplay/opensheetmusicdisplay)
+on a page that scrolls. Two of its options assume a page that stays put. On a
+phone, the first makes scrolling stutter at the score, and the second keeps the
+reader from scrolling away during playback. Both were found on an iPhone 14 in
+November 2026. Both behave the same in OSMD 2.3.1 and OSMD Extended 2.2.1.
+
+### Redraw for a new width only
+
+`autoResize: true` redraws the whole score on every window `resize`, without
+looking at the width, then calls `window.scrollTo` to keep the page at the
+same share of its height. Phones
+fire `resize` each time the browser's toolbar or address bar slides in or out,
+and that happens while the reader scrolls. So the page stutters and gets pulled
+back as the score goes by.
+
+**Rule:** `autoResize: false`, and redraw when the score's own width changes:
+
+```ts
+const osmd = new OpenSheetMusicDisplay(container, { ...options, autoResize: false });
+let width = container.clientWidth;
+let timer: number | undefined;
+new ResizeObserver(() => {
+  // The toolbar changes the height only; rotation and a resized window change the width.
+  if (container.clientWidth === width) return;
+  width = container.clientWidth;
+  clearTimeout(timer);
+  timer = setTimeout(() => {
+    osmd.zoom = zoomFor(width); // the site's zoom for that width, before drawing
+    osmd.render();
+  }, 200);
+}).observe(container);
+```
+
+Skip the redraw while no score is loaded yet.
+
+### Follow the cursor without taking the page
+
+OSMD's `followCursor` option (`osmd.FollowCursor`) calls `scrollIntoView` on the
+cursor at every note, centring it. While a score plays, each note undoes the
+reader's scrolling, so on a phone they can't get back to Pause. Inside an
+iframe it can move the page around the frame as well.
+
+**Rule:** keep `followCursor: false`. Scroll from the PlaybackManager
+listener's `cursorPositionChanged` instead, with a follower that:
+
+- scrolls only when the cursor reaches a line that is out of view, once and
+  smoothly, putting the line about 120 px below the top so the next lines show;
+- scrolls only while the reader watches: the cursor's previous position was on
+  screen. A reader who scrolled up to the buttons or down to the text is left
+  alone, and following starts again once they scroll back to the score;
+- holds off for 1.5 s after the reader's own scrolling: `touchmove`, `wheel`,
+  scroll keys outside buttons and form fields, and the scroll events right
+  after them (the fling after the finger lifts);
+- uses `window.scrollBy`, never `scrollIntoView`, so an embed scrolls only its
+  own frame;
+- measures in `requestAnimationFrame`, so OSMD has already moved the cursor;
+- may bring the score into view once when Play is pressed.
+
+opensheetmusiceducation.org's `src/scripts/follow-cursor.ts` does this for the
+generator, the choir generator, the rhythm trainer and their embeds.
+
+### Checking it
+
+Test both in WebKit at phone size: Playwright's `webkit` with
+`devices['iPhone 14']`. The browser pane in the Claude desktop app gives no
+answer while it is hidden: it sends no real `resize` events, runs no
+`ResizeObserver` callbacks and draws no animation frames.
+
+- **Toolbar:** change only the height with `setViewportSize` (±80 px) a few
+  times. Count new `<svg>` elements in the score container (a
+  `MutationObserver`) and calls to `window.scrollTo`: both stay at 0. A width
+  change redraws once.
+- **Playback:** play a long score (64 measures at 240 bpm) and act as a reader
+  scrolling up to the buttons: dispatch `touchmove`, then
+  `scrollTo({ behavior: 'instant' })`. Sample `scrollY` every 250 ms: it stays
+  where the reader put it, and Pause can be tapped there.
 
 ## How changes reach the sites
 
