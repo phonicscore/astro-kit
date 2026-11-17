@@ -1,0 +1,58 @@
+---
+/**
+ * The site's header, kept at the top of the window while the page scrolls
+ * (Thomas, 2026-11-17: on every site the header with the main navigation
+ * stays in reach). It is the header element itself and passes on every
+ * attribute the site gives it; what goes in it and how it looks are the
+ * site's, a ground that covers the page passing under it included.
+ *
+ * It stays at the top on screens at least 32rem (512 px) high. On a phone
+ * held sideways a header takes a third of the screen, so there it goes with
+ * the page. Where a site's header is too tall for some widths, a class of the
+ * site's own turns it off there: the kit's rules sit in the components layer
+ * with no specificity, so anything the site writes wins.
+ *
+ * lib/sticky-header.js keeps --sticky-header-h on <html> at the header's
+ * height while it stays at the top, else 0px. The kit uses it for the page's
+ * scroll padding, so a link to a heading and keyboard focus land below the
+ * header (WCAG 2.4.11), and to end an open language menu at the screen's
+ * bottom edge. The README says how a site uses it for its other bars and
+ * scripts.
+ */
+import type { HTMLAttributes } from 'astro/types';
+
+type Props = HTMLAttributes<'header'>;
+---
+
+<header data-sticky-header {...Astro.props}><slot /></header>
+
+<style is:global>
+  /* Tailwind's own order, in case this sheet comes first: a layer named here
+     first would otherwise rank below the ones Tailwind names after it. */
+  @layer theme, base, components, utilities;
+
+  @layer components {
+    :where(:root) {
+      scroll-padding-top: calc(var(--sticky-header-h, 0px) + 0.75rem);
+    }
+    @media screen and (min-height: 32rem) {
+      :where([data-sticky-header]) {
+        position: sticky;
+        top: 0;
+        z-index: 40;
+      }
+    }
+    /* The open list moves with the header, so scrolling the page never brings
+       its last links into view: it ends above the screen's bottom edge and
+       scrolls itself. */
+    :where([data-sticky-header] [data-language-menu] > ul) {
+      max-height: calc(100dvh - var(--sticky-header-h, 0px) - 1rem);
+      overflow-y: auto;
+    }
+  }
+</style>
+
+<script>
+  import { watchStickyHeader } from '../lib/sticky-header.js';
+  watchStickyHeader();
+</script>

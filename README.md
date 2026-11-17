@@ -26,13 +26,15 @@ already wired to the kit.
 | Family palette | `…/styles/family.css`, `…/styles/themes/<product>.css` | opt-in: the stage every .music site shares, the four product keys, and each product's curtain and light |
 | Dark mode | `…/components/ThemeHead.astro`, `ThemeToggle.astro`, `…/lib/score-scheme.js` | opt-in: light or dark before the first paint (the visitor's pick, else the system), the header toggle, OSMD scores in the site's dark tokens |
 | Languages | `…/components/LanguageMenu.astro`, `…/worker/language.ts` | opt-in: the header's language menu (a pick is kept in the `lang` cookie) and the Worker that sends each visitor to their language |
+| Sticky header | `…/components/StickyHeader.astro`, `…/lib/sticky-header.js` | the header element that stays at the top while the page scrolls, the scroll padding that keeps headings and focus below it, `--sticky-header-h` and `visibleTop()` for the site's other sticky bars and scrolling scripts |
 
 Deliberately **not** in the kit: headers, footers, page templates and copy.
 Each site owns its pages; the kit owns the plumbing. The one look that lives
 here is the .music family palette, because several sites share it: a change
 to it should reach phonicscore.com and the product site together. It reaches
 a site only through an explicit import. The dark mode and language parts are
-the behaviour and markup of two header controls; how they look is the site's.
+the behaviour and markup of two header controls, and `StickyHeader` is the
+behaviour of the header itself; how they look is the site's.
 
 ## Using it
 
@@ -381,6 +383,65 @@ The site's privacy policy names both: `theme` in localStorage (only while the
 pick differs from the system) and the `lang` cookie (a year, set only by a
 pick in the menu). musicxml.tools has wording Thomas approved (2026-10-29).
 
+## Sticky header
+
+**Rule (Thomas, 2026-11-17):** on every site the header with the main
+navigation stays at the top of the window while the page scrolls. Build the
+header with `StickyHeader` instead of a plain `<header>`:
+
+```astro
+---
+import StickyHeader from '@phonicscore/astro-kit/components/StickyHeader.astro';
+---
+<StickyHeader class="border-b border-line bg-paper">
+  <!-- logo, navigation, language menu, toggle: the site's own -->
+</StickyHeader>
+```
+
+It renders the `<header>` and passes on every attribute (`class`, `id`,
+`aria-*`). The kit's rules, in the components layer with no specificity, so
+any class of the site's wins:
+
+- **It sticks on screens at least 32rem (512 px) high**, above the page
+  (`z-index: 40`). On a phone held sideways (320 to 430 px high) a header takes
+  a third of the screen, so there it goes with the page.
+- **Scroll padding** on `<html>`: the header's height plus 0.75rem, so a link
+  to a heading and keyboard focus land below the header (WCAG 2.4.11, focus
+  not obscured), whatever its height in each language and width.
+- **An open `LanguageMenu` inside it ends above the screen's bottom edge** and
+  scrolls itself: the list moves with the header, so scrolling the page never
+  brings its last links into view.
+
+The header needs a ground of its own (`bg-paper`, or a translucent one with
+`backdrop-blur`), since the page passes under it.
+
+`lib/sticky-header.js` keeps **`--sticky-header-h`** on `<html>` at the
+header's height while it sticks and at `0px` while it doesn't, measured again
+when the header or the window changes size. Use it for the site's own sticky
+bars, so they stop below the header instead of under it:
+`top-[var(--sticky-header-h,0px)]` (with the fallback: a page without the
+header, such as an embed, has no value). A sticky bar inside its own scrolling
+box (a table head in an `overflow-auto` frame) keeps `top-0`.
+
+A script that scrolls something into view with `window.scrollBy` (scroll
+padding doesn't reach it) takes the top of the free window from
+**`visibleTop()`**: the header's bottom edge while any of it shows, else 0.
+
+```ts
+import { visibleTop } from '@phonicscore/astro-kit/lib/sticky-header.js';
+
+const line = cursor.getBoundingClientRect();
+if (line.top < visibleTop()) window.scrollBy({ top: line.top - visibleTop() - 120, behavior: 'smooth' });
+```
+
+**A header too tall for phones** lets go there with a class of its own:
+below 640 px wide, opensheetmusiceducation.org's header is 167 to 293 px high
+(five menu links on two to four rows) and musicxml.tools' 189 to 242 px (the
+pills on two or three rows), a quarter of a phone's screen or more, so both
+add `max-sm:static`; `--sticky-header-h` then turns 0 there by itself.
+osmd-wp.com shows the other way: a one-row menu that scrolls sideways on
+phones keeps its header 107 px high there, so it sticks at every width.
+
 ## OSMD on a kit site
 
 The kit draws no scores, but several sites put
@@ -438,8 +499,9 @@ listener's `cursorPositionChanged` instead, with a follower that:
   scroll keys outside buttons and form fields, and the scroll events right
   after them (the fling after the finger lifts);
 - counts as on screen only the part of the window that sticky controls leave
-  free, at the top (musicxml.tools' player bar) or the bottom (the rhythm
-  trainer's tap pad), so a line under them gets scrolled into view;
+  free, at the top (the sticky header, `visibleTop()`, and musicxml.tools'
+  player bar) or the bottom (the rhythm trainer's tap pad), so a line under
+  them gets scrolled into view;
 - uses `window.scrollBy`, never `scrollIntoView`, so an embed scrolls only its
   own frame;
 - measures in `requestAnimationFrame`, so OSMD has already moved the cursor;
