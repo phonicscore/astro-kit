@@ -5,6 +5,30 @@ Versions are git tags, and follow semver: patch = fixes, minor = features
 own code. Sites depend on `#semver:^1.0.0`, so every patch and minor reaches
 them on `npm update` and no major ever does by surprise.
 
+## 1.14.0 — 2026-11-17
+
+- **The header stays at the top** (`components/StickyHeader.astro`,
+  `lib/sticky-header.js`). Thomas's rule for every site: the header with the
+  main navigation stays in reach while the page scrolls. `StickyHeader` is the
+  `<header>` element with that behaviour; it passes on every attribute and has
+  no look of its own. Opt-in, by using it:
+  - sticks on screens at least 32rem high (not on a phone held sideways);
+  - scroll padding on `<html>` of the header's height plus 0.75rem, so links to
+    headings and keyboard focus land below it (WCAG 2.4.11);
+  - an open `LanguageMenu` inside it ends above the screen's bottom edge and
+    scrolls itself;
+  - `--sticky-header-h` on `<html>`: the height while it sticks, else 0px, for
+    the site's other sticky bars;
+  - `visibleTop()` for scripts that scroll with `window.scrollBy`.
+
+Checked in Playwright (Chromium 1280×800 and 768×1024, WebKit iPhone 14) on
+opensheetmusiceducation.org, musicxml.tools and osmd-wp.com with this
+version: links to headings and keyboard focus land below the header, the
+sites' own sticky bars stop right below it, the last language in an open
+menu is reachable, the header goes with the page at 1280×450. `npm test`
+passes (54); the change adds 48 Tailwind candidates, none of which makes CSS
+in the design systems of those three sites or the starter.
+
 ## 1.13.0 — 2026-11-17
 
 - **Article pages can say so** (`components/SeoHead.astro`). Every page said
