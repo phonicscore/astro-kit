@@ -5,6 +5,52 @@ Versions are git tags, and follow semver: patch = fixes, minor = features
 own code. Sites depend on `#semver:^1.0.0`, so every patch and minor reaches
 them on `npm update` and no major ever does by surprise.
 
+## 1.12.0 — 2026-11-17
+
+- **Usermaven stores nothing in the browser** (`lib/usermaven-guard.js`,
+  `components/Analytics.astro`). Usermaven's script keeps a retry queue in
+  localStorage, `usermaven_offline_queue_default_data`: every event is written
+  there on its way out, and events it could not send stay there for the next
+  page. § 165 (3) TKG 2021 allows storing on a visitor's device without consent
+  only what is strictly necessary for what the visitor asked for, and a buffer
+  for statistics is not, so Thomas decided on 2026-11-17 that the queue stays
+  in memory on every kit site. `Analytics` now runs a guard in the same inline
+  script, before the loader:
+  - a write through `Storage.prototype.setItem` to a key starting with
+    `usermaven_` does nothing; every other key (`theme`, `um_exclusion`, a
+    site's own) is stored as before. It never assigns to `localStorage`
+    itself, which would store an item;
+  - every `usermaven_offline_queue_*` entry from earlier visits is removed once;
+  - it never throws (no storage, blocked site data, private mode) and runs
+    once per page however often `Analytics` renders.
+
+  The script's own switch, `disableEventPersistence`, reaches only its main
+  store, not the queue, and its script tag has no data attribute for it (the
+  list it reads is fixed), so the guard covers both. The script is built for a
+  failing storage: the queue lives in memory and the storage only mirrors it.
+  What changes for a visitor: an event that cannot be sent (offline, a blocked
+  request) is sent when the page is back online, and lost when the visitor
+  leaves the page first; before, the next page sent it. The guard is a string,
+  so the site's bundler cannot rewrite it and the page gets exactly the code
+  the tests run. No prop turns it off: the decision covers every site.
+- **Tests** (`test/usermaven-guard.test.mjs`): the guard as the page's text,
+  with a stand-in Storage. A `usermaven_` write is dropped, other keys are
+  stored, old queue entries are removed and nothing else is, missing or
+  throwing storage does not throw, a second run does not wrap twice.
+
+Checked on a local build of sawti.app (`wrangler dev`, Playwright, every event
+request answered in the browser): after a page load and a store click no key
+starting with `usermaven_` is left, against one on 1.11.2; a planted queue
+entry is removed and its event not sent, where 1.11.2 sent it; `theme` and the
+`lang` cookie work as before; no new console messages.
+
+What a site sees on update: nothing in its code. The production build gets
+one more statement in the inline script of every page; the weekly update
+builds without the production setting, so it has no loader to compare and
+takes 1.12.0 as "no visible change", and the deploy that follows brings the
+guard. A privacy page that names `usermaven_offline_queue_...` should drop
+that passage when the site takes 1.12.0.
+
 ## 1.11.2 — 2026-11-17
 
 - **The language redirect never leaves the site** (`worker/language.ts`). It
