@@ -437,6 +437,9 @@ listener's `cursorPositionChanged` instead, with a follower that:
 - holds off for 1.5 s after the reader's own scrolling: `touchmove`, `wheel`,
   scroll keys outside buttons and form fields, and the scroll events right
   after them (the fling after the finger lifts);
+- counts as on screen only the part of the window that sticky controls leave
+  free, at the top (musicxml.tools' player bar) or the bottom (the rhythm
+  trainer's tap pad), so a line under them gets scrolled into view;
 - uses `window.scrollBy`, never `scrollIntoView`, so an embed scrolls only its
   own frame;
 - measures in `requestAnimationFrame`, so OSMD has already moved the cursor;
