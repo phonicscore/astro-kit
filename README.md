@@ -302,6 +302,15 @@ Referer), crawlers and link previews are never redirected, and neither is a
 page that doesn't exist in the target language (it asks ASSETS first). The
 redirect is a 302 that no cache keeps.
 
+The redirect never leaves the site. Its new address is the old one with
+another language prefix, and what follows the prefix comes from the visitor:
+`/de//example.com/` without its `/de` is `//example.com/`, which a browser
+reads as another host. So an address with an empty segment (`//`) or a
+backslash is never redirected and goes on to ASSETS as it is, a redirect only
+names a path that starts with one slash, and the question to ASSETS is put to
+the site's own origin. `test/language.test.mjs` holds the redirect to that
+(see "Tests").
+
 ```ts
 // worker/index.ts
 import { createLanguageRedirect } from '@phonicscore/astro-kit/worker/language.ts';
@@ -331,7 +340,7 @@ pick in the menu). musicxml.tools has wording Thomas approved (2026-10-29).
 
 ## How changes reach the sites
 
-1. Change the kit, add a line to `CHANGELOG.md`, bump `version` in `package.json`.
+1. Change the kit, run `npm test`, add a line to `CHANGELOG.md`, bump `version` in `package.json`.
 2. Commit, then tag: `git tag v1.2.0 && git push --follow-tags`.
 3. In each site: `npm update @phonicscore/astro-kit`, build, commit the lockfile.
 
@@ -420,6 +429,17 @@ To try the comparison locally, with both checkouts installed:
 ```sh
 ci/compare.sh <site>/before <site>/after out
 ```
+
+## Tests
+
+`npm test` runs the tests in `test/` with Node alone, which reads the Workers'
+TypeScript as it is (Node 22.18 or newer): nothing has to be installed. They
+run on every pull request and on `main` (`.github/workflows/test.yml`).
+
+So far they cover the language redirect: every redirect the sites rely on, and
+that no address leads off the site. The weekly update compares a site's pages,
+not what its Worker answers, so a Worker's behaviour is checked only here.
+`test/` is not part of the package a site installs.
 
 ## Rules for this repo
 

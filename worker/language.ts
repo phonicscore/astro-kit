@@ -22,6 +22,14 @@
  * The redirect is a 302 that no cache keeps. It relies on the paths mirroring
  * each other: /viewer/ in German is /de/viewer/.
  *
+ * It never leaves the site. The new address is the old one with another
+ * language prefix, so what comes after the prefix is the visitor's to choose:
+ * /de//example.com/ without its /de is //example.com/, which a browser reads as
+ * the host example.com. An address with an empty segment or a backslash is no
+ * page of ours and goes on as it is, the redirect only ever names a path that
+ * starts with one slash, and the question to ASSETS is asked about this site's
+ * origin (test/language.test.mjs).
+ *
  *   // worker/index.ts in a site
  *   import { createLanguageRedirect } from '@phonicscore/astro-kit/worker/language.ts';
  *   const languageRedirect = createLanguageRedirect({ locales: ['en', 'de', 'fr'] });
@@ -105,6 +113,9 @@ export function createLanguageRedirect(options: LanguageOptions) {
     const url = new URL(request.url);
     // Pages only: their addresses end in a slash. Files and slashless forms go on as they are.
     if (!url.pathname.endsWith('/')) return null;
+    // No page has an empty segment or a backslash in its address. Browsers read both, at the
+    // start of a path, as the start of a host: such an address is never turned into a redirect.
+    if (url.pathname.includes('//') || url.pathname.includes('\\')) return null;
     if (BOT.test(request.headers.get('User-Agent') ?? '')) return null;
     if (fromThisSite(request, url)) return null;
 
@@ -118,8 +129,14 @@ export function createLanguageRedirect(options: LanguageOptions) {
     if (!target || target === current) return null;
 
     const path = target === defaultLocale ? base : `/${target}${base}`;
-    // Only to a page that exists in that language.
-    const probe = await env.ASSETS.fetch(new Request(new URL(path, url), { method: 'HEAD' }));
+    // Only to a path on this site, whatever came in: one slash at the start, then no second
+    // one and no backslash.
+    if (!path.startsWith('/') || path.startsWith('//') || path.includes('\\')) return null;
+    // Only to a page that exists in that language. The question goes to this site's origin with
+    // the new path: setting the path can't change the host, as resolving it against the URL did.
+    const page = new URL(url.origin);
+    page.pathname = path;
+    const probe = await env.ASSETS.fetch(new Request(page, { method: 'HEAD' }));
     if (probe.status !== 200) return null;
 
     return new Response(null, {
