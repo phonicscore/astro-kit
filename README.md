@@ -14,7 +14,7 @@ already wired to the kit.
 |---|---|---|
 | Integration preset | `@phonicscore/astro-kit` | astro-icon, the i18n-aware sitemap, SEO/GEO build checks + `llms.txt`, Tailwind v4, the content transforms — one line in `astro.config.mjs` |
 | Share cards | `ogImages` option of the preset | a 1200×630 link-preview PNG for every page at `/og/<slug>.png`, themed per site; on by default |
-| `SeoHead` | `…/components/SeoHead.astro` | title, description, canonical, hreflang, Open Graph + Twitter cards, schema.org graph, favicons |
+| `SeoHead` | `…/components/SeoHead.astro` | title, description, canonical, hreflang, Open Graph + Twitter cards, schema.org graph, favicons; `og:type` article with its times for article pages |
 | `Analytics` | `…/components/Analytics.astro` | Usermaven, cookieless (no banner), production-only, nothing kept in the browser's storage; `src` and `trackingHost` for a proxy on the site's own domain |
 | `track()` | `…/lib/track.js` | Usermaven custom events for goals and funnels (a file opened, a result downloaded); does nothing without `Analytics` |
 | `Breadcrumbs`, `Prose` | `…/components/*.astro` | visible breadcrumb trail; the wrapper for rendered Markdown |
@@ -161,6 +161,37 @@ phonicscore({
 - `ogImages: false` switches the generator off. Pass `ogImages={false}` to
   `SeoHead` as well, or the pages point at cards nobody draws. The reverse is
   safe: a page whose `SeoHead` has `ogImages={false}` gets no card drawn.
+
+## Article pages
+
+`SeoHead` says `og:type` "website" unless a page asks for "article". Two
+optional props, passed on to `@jdevalk/astro-seo-graph` under the same names:
+
+| Prop | Type | Becomes |
+|---|---|---|
+| `ogType` | `'website' \| 'article'` | `og:type`; "website" when left out |
+| `article.publishedTime` | `string \| Date` | `article:published_time` |
+| `article.modifiedTime` | `string \| Date` | `article:modified_time` |
+| `article.authors` | `string[]` | one `article:author` each; the first also `<meta name="author">` |
+| `article.section` | `string` | `article:section` |
+| `article.tags` | `string[]` | one `article:tag` each |
+
+`article` counts only with `ogType="article"`; on any other page it is
+dropped. Times are ISO 8601 strings; a Date becomes `toISOString()`, a
+string goes out as it is. Take the values from the page's schema.org Article
+node (`datePublished`, `dateModified`), so share tags and structured data
+say the same:
+
+```astro
+<SeoHead
+  {...rest}
+  graph={graph}
+  ogType="article"
+  article={{ publishedTime: '2026-03-02T00:00:00.000Z', modifiedTime: '2026-11-10T00:00:00.000Z' }}
+/>
+```
+
+A site that passes neither prop gets the same head as before.
 
 ## Analytics
 

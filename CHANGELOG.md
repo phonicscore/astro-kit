@@ -5,6 +5,33 @@ Versions are git tags, and follow semver: patch = fixes, minor = features
 own code. Sites depend on `#semver:^1.0.0`, so every patch and minor reaches
 them on `npm update` and no major ever does by surprise.
 
+## 1.13.0 — 2026-11-17
+
+- **Article pages can say so** (`components/SeoHead.astro`). Every page said
+  `og:type` "website", also guides and posts whose schema.org graph holds an
+  Article. Two optional props, passed on to `@jdevalk/astro-seo-graph`'s
+  `Seo` under its own names:
+  - `ogType?: 'website' | 'article'`, "website" when left out, as before;
+  - `article?: { publishedTime?, modifiedTime?, authors?, section?, tags? }`,
+    only with `ogType="article"`: the `article:published_time`,
+    `article:modified_time`, `article:author`, `article:section` and
+    `article:tag` tags. Times are ISO 8601 strings or Date objects (a Date
+    becomes `toISOString()`). The first author also becomes
+    `<meta name="author">`, which is how the underlying component works.
+
+  The underlying component's other options (`profile` and `book` types,
+  `expirationTime`, `articlePublisher`) stay out until a site needs them.
+
+Checked on a local build of sawti.app: with kit 1.12.0 and with this
+version, the site's code unchanged, all 406 files of the build (64 pages) are
+byte for byte the same. With the site passing the props, its 32 guides and
+posts say "article" with the times of their Article node, and nothing else
+in the build changes. `npm test` passes (47); the change adds 17 Tailwind
+candidates, none of which makes CSS in sawti.app's design system.
+
+What a site sees on update: nothing. A site that wants the type passes the
+two props from its Article data (see "Article pages" in the README).
+
 ## 1.12.0 — 2026-11-17
 
 - **Usermaven stores nothing in the browser** (`lib/usermaven-guard.js`,
