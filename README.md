@@ -148,6 +148,12 @@ phonicscore({
 | `siteName` | `llms.title` when there is no logo | a string, `false`, or `{ text, font, color, size, weight, tracking }`. Next to a logo only when set; its size then defaults to half the logo's height. `tracking` is letter-spacing in em |
 | `title` | Inter Bold, 60px, line height 1.15 | `{ font, color, size, weight, lineHeight }` |
 | `text` | Inter Regular, 30px, line height 1.4 | the same |
+
+The default Inter has Latin and Latin Extended letters (Polish ą ę ł since
+1.16.0; `scripts/make-card-fonts.py`, `test/card-fonts.test.mjs`). A site's own
+card fonts need every letter of its languages too: Fontsource's `latin` files
+stop at ÿ, so a Polish card set in them shows empty boxes. See "Adding a
+language".
 | `padding` | `70` | px around the content |
 
 - Colours left out follow the background: light text on a dark ground, dark
@@ -448,6 +454,32 @@ The site's privacy policy names both: `theme` in localStorage (only while the
 pick differs from the system) and the `lang` cookie (a year, set only by a
 pick in the menu). musicxml.tools has wording Thomas approved (2026-10-29).
 
+### Adding a language
+
+The kit holds no list of languages: each site keeps its own (`locales.ts`,
+which its Worker, language menu and sitemap read). Polish, the tenth
+language of musicxml.tools, opensheetmusiceducation.org and
+opensheetmusicdisplay.org (2026-11-18), showed what a new one needs beyond
+its strings:
+
+- **Its code everywhere the site lists languages**: `locales.ts`,
+  `i18n.locales` in `astro.config.mjs`, and any script or test with its own
+  list (grep for the last language added).
+- **Fonts with its letters.** Fontsource's `latin` subset ends at U+00FF, so
+  it has no ą ć ę ł ń ś ź ż (nor ő, č, ğ ...). Web fonts: import the
+  `latin-ext` CSS too, or add an `@font-face` with Fontsource's latin-ext
+  `unicode-range`; a page loads that file only when it has such a letter.
+  Share-card fonts take one file per role: merge the `latin-ext` subset into
+  the Latin one with fontTools, without its layout tables, so English cards
+  keep their pixels (as `scripts/make-card-fonts.py` does here).
+- **Its plural forms.** `Intl.PluralRules('pl')` answers `one`, `few` (2 to
+  4), `many` (0, 5 to 21) and `other` (fractions): a `{ one, other }` pair
+  can't say "5 stron". Give the strings room for the forms the language has,
+  or write them so no word depends on a number ("Strony: {n}").
+- **PDFs.** jsPDF's built-in fonts know Latin-1 only, and Polish, Czech or
+  Turkish letters are outside it: a site that writes PDFs with text has to
+  fall back (an image page, or an English line) or embed a font.
+
 ## Sticky header
 
 **Rule (Thomas, 2026-11-17):** on every site the header with the main
@@ -690,7 +722,8 @@ TypeScript as it is (Node 22.18 or newer): nothing has to be installed. They
 run on every pull request and on `main` (`.github/workflows/test.yml`).
 
 They cover the language redirect (every redirect the sites rely on, and that
-no address leads off the site), the Usermaven storage guard, run as the
+no address leads off the site), the default share-card fonts (every letter
+of the sites' Latin-script languages), the Usermaven storage guard, run as the
 text the page gets, with a stand-in Storage, and the video rule's check over
 small pages and a temporary build folder. The weekly update compares a
 site's pages, not what its Worker answers, so a Worker's behaviour is checked

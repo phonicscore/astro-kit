@@ -5,6 +5,25 @@ Versions are git tags, and follow semver: patch = fixes, minor = features
 own code. Sites depend on `#semver:^1.0.0`, so every patch and minor reaches
 them on `npm update` and no major ever does by surprise.
 
+## 1.16.0 — 2026-11-18
+
+- **Polish on the share cards.** The default card fonts
+  (`assets/fonts/inter-latin-400.ttf`, `inter-latin-700.ttf`) were
+  Fontsource's Latin subset, which ends at ÿ: a Polish title came out with
+  empty boxes for ą ć ę ł ń ś ź ż (French Ÿ was missing too). Each now has
+  Fontsource's Latin Extended letters added (`@fontsource/inter` 5.3.0),
+  for Polish, Czech, Hungarian, Turkish and the rest. The Latin glyphs,
+  metrics and kerning stay as they were, and the added letters come without
+  their layout tables, so an English or German card draws exactly the same
+  pixels as before (checked: two cards, 0 of 1,008,000 pixels differ; with
+  the merged kerning "in your" moved by two pixels). `scripts/make-card-fonts.py`
+  makes them; `test/card-fonts.test.mjs` checks every letter of the sites'
+  Latin-script languages in both files (it fails on 1.15.0).
+- **README, "Adding a language"**: what a site needs for a new language
+  beyond its strings (its code in every list, fonts with its letters, its
+  plural forms, PDFs), from adding Polish to musicxml.tools,
+  opensheetmusiceducation.org and opensheetmusicdisplay.org.
+
 ## 1.15.0 — 2026-11-18
 
 - **The video rule** (`lib/video-check.js`, run by the preset after every
