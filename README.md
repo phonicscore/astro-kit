@@ -12,7 +12,7 @@ already wired to the kit.
 
 | Part | Import | What it gives a site |
 |---|---|---|
-| Integration preset | `@phonicscore/astro-kit` | astro-icon, the i18n-aware sitemap, SEO/GEO build checks + `llms.txt`, Tailwind v4, the content transforms — one line in `astro.config.mjs` |
+| Integration preset | `@phonicscore/astro-kit` | astro-icon, the i18n-aware sitemap, SEO/GEO build checks + `llms.txt`, Tailwind v4, the content transforms, the video rule (the build fails on a `VideoObject` without `name`, `thumbnailUrl` or `uploadDate`) — one line in `astro.config.mjs` |
 | Share cards | `ogImages` option of the preset | a 1200×630 link-preview PNG for every page at `/og/<slug>.png`, themed per site; on by default |
 | `SeoHead` | `…/components/SeoHead.astro` | title, description, canonical, hreflang, Open Graph + Twitter cards, schema.org graph, favicons; `og:type` article with its times for article pages |
 | `Analytics` | `…/components/Analytics.astro` | Usermaven, cookieless (no banner), production-only, nothing kept in the browser's storage; `src` and `trackingHost` for a proxy on the site's own domain |
@@ -194,6 +194,71 @@ say the same:
 ```
 
 A site that passes neither prop gets the same head as before.
+
+## Videos
+
+**Rule (Thomas, 2026-11-18):** every schema.org `VideoObject` on a kit site
+carries the three fields Google's video results require, `name`,
+`thumbnailUrl` and `uploadDate`, and `uploadDate` is the day the video was
+first published, written in the site's source. Without `uploadDate`, Search
+Console's Videos report lists the page under a critical issue and the video
+stays out of the video results: it happened to sawti.app's three home pages
+on 2026-11-18.
+
+The preset checks every page after each build. It reads the page's JSON-LD,
+finds each `VideoObject` (in a `@graph`, at the top or nested, such as an
+Article's `video`) and **fails the build** when one
+
+- has no `name`, `thumbnailUrl` or `uploadDate`;
+- has an `uploadDate` that is not an ISO 8601 time with a time zone
+  (`2023-12-10T00:00:00.000Z` and `2023-12-10T10:14:35+01:00` pass,
+  `2023-12-10` does not);
+- has an `uploadDate` at or after the moment the build started. That is
+  `new Date()` in a page: the build's own time, which changes with every
+  build (so the weekly update's JSON-LD comparison flags the page every
+  week) and says nothing about the video.
+
+The error names each page and node. A build without any `VideoObject` logs
+nothing; one with videos logs how many it checked.
+
+Which date: the upload date where the video was published first. Vimeo's
+oEmbed answers it as `upload_date`
+(`https://vimeo.com/api/oembed.json?url=https://vimeo.com/<id>/<hash>`), and
+YouTube shows it under the video. A video that has no earlier home gets the
+day it first went online on the site. Keep the date next to the video's file
+name, not in a page, so every page that shows the video says the same:
+
+```ts
+// src/lib/video.ts
+export const productVideo = {
+  file: '/video/preview-de.mp4',
+  poster: '/video/preview-de-poster.jpg',
+  uploaded: new Date('2023-12-10T00:00:00Z'), // Vimeo upload_date of the German cut
+};
+
+// in the page's graph, with @jdevalk/seo-graph-core
+buildVideoObject(
+  {
+    url,
+    name,
+    description,
+    isPartOf: { '@id': ids.webPage(url) },
+    thumbnailUrl: new URL(productVideo.poster, site).href,
+    contentUrl: new URL(productVideo.file, site).href,
+    uploadDate: productVideo.uploaded, // a Date becomes toISOString()
+    duration: 'PT21S',
+  },
+  ids
+);
+```
+
+Google also recommends `description`, `contentUrl` (the file) or `embedUrl`
+(the player) and `duration`; the check leaves those to the site. A player
+without a `VideoObject` (a Vimeo or YouTube embed that loads on a click) is
+not checked: no structured data, nothing for Google to reject. And valid
+markup does not promise a video result: Google shows one mainly where the
+video is the page's main content, rarely for a product video on a home page.
+The markup still has to be valid, or the Videos report flags it.
 
 ## Analytics
 
@@ -625,8 +690,9 @@ TypeScript as it is (Node 22.18 or newer): nothing has to be installed. They
 run on every pull request and on `main` (`.github/workflows/test.yml`).
 
 They cover the language redirect (every redirect the sites rely on, and that
-no address leads off the site) and the Usermaven storage guard, run as the
-text the page gets, with a stand-in Storage. The weekly update compares a
+no address leads off the site), the Usermaven storage guard, run as the
+text the page gets, with a stand-in Storage, and the video rule's check over
+small pages and a temporary build folder. The weekly update compares a
 site's pages, not what its Worker answers, so a Worker's behaviour is checked
 only here.
 `test/` is not part of the package a site installs.
@@ -646,7 +712,10 @@ only here.
   every site, by Thomas's decision (2026-10-31), and so does "PhonicScore
   GmbH" in each site's own footer. Privacy defaults reach every site too
   (1.12.0, Thomas's decision of 2026-11-17): Usermaven's script stores
-  nothing in the visitor's browser (see "Analytics").
+  nothing in the visitor's browser (see "Analytics"). The video check runs on
+  every site too (1.15.0, Thomas's rule of 2026-11-18): it changes no output,
+  and fails a build only on a `VideoObject` that Google would reject (see
+  "Videos").
 - **No Tailwind Plus code — ever.** This repository is public. The Tailwind Plus
   licence covers using its components in our own projects, not redistributing
   them — and a public package is redistribution. Components built from a

@@ -3,8 +3,10 @@
  * @phonicscore/astro-kit — the foundation every PhonicScore site builds on.
  *
  * One integration brings the whole toolchain: icons, the i18n-aware sitemap,
- * the SEO/GEO checks + llms.txt, Tailwind v4, the content transforms and the
- * share cards. A site lists only `phonicscore({...})` in astro.config.mjs.
+ * the SEO/GEO checks + llms.txt, Tailwind v4, the content transforms, the
+ * share cards and the video rule (a build fails on a schema.org VideoObject
+ * without name, thumbnailUrl or uploadDate). A site lists only
+ * `phonicscore({...})` in astro.config.mjs.
  * Adding an integration HERE reaches every site on its next
  * `npm update @phonicscore/astro-kit` — that is the whole point of this
  * package, so keep site-specific values out.
@@ -17,6 +19,7 @@ import seoGraph from '@jdevalk/astro-seo-graph/integration';
 import tailwindcss from '@tailwindcss/vite';
 import { unified } from '@astrojs/markdown-remark';
 import rehypeContent from './lib/rehype-content.mjs';
+import { checkVideos } from './lib/video-check.js';
 
 /**
  * @typedef {object} KitOptions
@@ -84,6 +87,9 @@ export default function phonicscore(options) {
   let astroConfig;
   /** @type {ReturnType<typeof import('./lib/og-cards.js').createCards> | undefined} */
   let cards;
+  // When the build started: a VideoObject's uploadDate at or after it is the
+  // build's own time (or the future), never the day the video was published.
+  let buildStart = Date.now();
   // Loaded on first use, so canvaskit and resvg stay out of a build that has
   // no cards to draw.
   const ogCards = () =>
@@ -178,7 +184,14 @@ export default function phonicscore(options) {
         server.middlewares.use(devMiddleware({ server, cards: ogCards, logger }));
       },
 
+      'astro:build:start': () => {
+        buildStart = Date.now();
+      },
+
       'astro:build:done': async ({ dir, logger }) => {
+        // The video rule (README "Videos"): throws, so the build fails.
+        await checkVideos(dir, buildStart, logger);
+
         if (options.ogImages !== false) await (await ogCards()).write(dir, logger);
 
         if (options.headers === false) return;

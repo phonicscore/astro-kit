@@ -5,6 +5,25 @@ Versions are git tags, and follow semver: patch = fixes, minor = features
 own code. Sites depend on `#semver:^1.0.0`, so every patch and minor reaches
 them on `npm update` and no major ever does by surprise.
 
+## 1.15.0 — 2026-11-18
+
+- **The video rule** (`lib/video-check.js`, run by the preset after every
+  build). Thomas's rule for every site: a schema.org `VideoObject` carries
+  `name`, `thumbnailUrl` and `uploadDate`, the day the video was first
+  published, set in the site's source. The build fails, naming each page and
+  node, when one lacks a field, has an `uploadDate` without a time zone, or
+  one at or after the build's start (`new Date()` in a page). Found on
+  sawti.app the same day: Search Console listed its three home pages under
+  "Missing field 'uploadDate'", a critical issue in the Videos report.
+  The check changes no output; a site without `VideoObject` sees nothing.
+
+Checked with sawti.app's build on this version: as it is now (with upload
+dates) it passes and logs three videos; without `uploadDate`, and with
+`uploadDate: new Date()`, the build fails and names the three home pages.
+Of the eleven kit sites only sawti.app carries a `VideoObject` today
+(christaprameshuber.ch and communicartists embed players without one), so
+the release fails no site's build. `npm test` passes (64, 10 new).
+
 ## 1.14.0 — 2026-11-17
 
 - **The header stays at the top** (`components/StickyHeader.astro`,
