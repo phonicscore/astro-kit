@@ -5,6 +5,25 @@ Versions are git tags, and follow semver: patch = fixes, minor = features
 own code. Sites depend on `#semver:^1.0.0`, so every patch and minor reaches
 them on `npm update` and no major ever does by surprise.
 
+## 1.17.0 — 2026-11-19
+
+- **The feed rule** (`lib/feed-check.js`, run by the preset after every
+  build). Thomas's rule: "if there is a blog, add a rss feed". A page whose
+  schema.org `BlogPosting` is about the page itself has to link, with
+  `<link rel="alternate" type="application/rss+xml">`, a feed in the build
+  that lists its canonical URL, or the build fails and names the page.
+  Sites without posts see no change. Of the kit sites, phonicscore.com
+  (a feed no page linked) and sawti.app (no feed) need their own change
+  before they take this version; musicxml.tools and christaprameshuber.ch
+  pass as they are.
+- **`lib/rss.js`**: `rss()` and `rssResponse()` write an RSS 2.0 feed for an
+  Astro endpoint, newest item first, links made absolute, text escaped. No
+  dependency.
+- **`SeoHead` takes `feeds`** (`{ href, title }[]`), one
+  `<link rel="alternate" type="application/rss+xml">` each. A page that
+  passes none gets the same head as before.
+- README "Feeds"; `test/feeds.test.mjs`.
+
 ## 1.16.0 — 2026-11-18
 
 - **Polish on the share cards.** The default card fonts

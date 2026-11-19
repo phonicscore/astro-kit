@@ -17,6 +17,11 @@
  * Times are ISO 8601 strings, or Date objects, which become toISOString().
  * The first author also becomes <meta name="author">. Pass the same values
  * the page's schema.org Article node uses, so the two never disagree.
+ *
+ * `feeds` adds one <link rel="alternate" type="application/rss+xml"> per feed,
+ * so readers and crawlers find it. A site with a blog passes its feed on every
+ * page of that language; the preset fails a build whose blog posts link no
+ * feed that lists them (README "Feeds").
  */
 import Seo from '@jdevalk/astro-seo-graph/Seo.astro';
 import { ogSlug } from '../lib/og.js';
@@ -40,6 +45,14 @@ interface ArticleMeta {
   section?: string;
   /** article:tag, one tag each. */
   tags?: string[];
+}
+
+/** A feed the page links, e.g. { href: '/blog/rss.xml', title: 'Sawti blog' }. */
+interface Feed {
+  /** Absolute or site-relative URL of the feed. */
+  href: string;
+  /** The feed's name, shown by readers that offer to subscribe. */
+  title: string;
 }
 
 interface Props {
@@ -66,6 +79,8 @@ interface Props {
   ogType?: 'website' | 'article';
   /** The article:* tags; used only with ogType="article". */
   article?: ArticleMeta;
+  /** RSS feeds to link (rel="alternate"); a blog's feed on every page of its language. */
+  feeds?: Feed[];
 }
 
 const {
@@ -83,6 +98,7 @@ const {
   ogImages = true,
   ogType,
   article,
+  feeds = [],
 } = Astro.props;
 
 const canonical = new URL(Astro.url.pathname, siteUrl).href;
@@ -118,5 +134,11 @@ const seoAlternates = {
   extraLinks={[
     { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
     { rel: 'sitemap', href: '/sitemap-index.xml' },
+    ...feeds.map((f) => ({
+      rel: 'alternate',
+      type: 'application/rss+xml',
+      title: f.title,
+      href: new URL(f.href, siteUrl).href,
+    })),
   ]}
 />

@@ -12,9 +12,10 @@ already wired to the kit.
 
 | Part | Import | What it gives a site |
 |---|---|---|
-| Integration preset | `@phonicscore/astro-kit` | astro-icon, the i18n-aware sitemap, SEO/GEO build checks + `llms.txt`, Tailwind v4, the content transforms, the video rule (the build fails on a `VideoObject` without `name`, `thumbnailUrl` or `uploadDate`) — one line in `astro.config.mjs` |
+| Integration preset | `@phonicscore/astro-kit` | astro-icon, the i18n-aware sitemap, SEO/GEO build checks + `llms.txt`, Tailwind v4, the content transforms, the video rule (the build fails on a `VideoObject` without `name`, `thumbnailUrl` or `uploadDate`), the feed rule (the build fails on a blog post that is in no feed it links) — one line in `astro.config.mjs` |
 | Share cards | `ogImages` option of the preset | a 1200×630 link-preview PNG for every page at `/og/<slug>.png`, themed per site; on by default |
-| `SeoHead` | `…/components/SeoHead.astro` | title, description, canonical, hreflang, Open Graph + Twitter cards, schema.org graph, favicons; `og:type` article with its times for article pages |
+| `SeoHead` | `…/components/SeoHead.astro` | title, description, canonical, hreflang, Open Graph + Twitter cards, schema.org graph, favicons; `og:type` article with its times for article pages; `feeds` links the blog's RSS feed |
+| Feeds | `…/lib/rss.js` | `rssResponse()` writes a blog's RSS 2.0 feed from an Astro endpoint, newest post first |
 | `Analytics` | `…/components/Analytics.astro` | Usermaven, cookieless (no banner), production-only, nothing kept in the browser's storage; `src` and `trackingHost` for a proxy on the site's own domain |
 | `track()` | `…/lib/track.js` | Usermaven custom events for goals and funnels (a file opened, a result downloaded); does nothing without `Analytics` |
 | `Breadcrumbs`, `Prose` | `…/components/*.astro` | visible breadcrumb trail; the wrapper for rendered Markdown |
@@ -265,6 +266,66 @@ not checked: no structured data, nothing for Google to reject. And valid
 markup does not promise a video result: Google shows one mainly where the
 video is the page's main content, rarely for a product video on a home page.
 The markup still has to be valid, or the Videos report flags it.
+
+## Feeds
+
+**Rule (Thomas, 2026-11-19):** "if there is a blog, add a rss feed". A kit
+site with a blog serves an RSS feed for every language that has posts, and
+every page of that language links it. Feed readers, Slack's RSS app and the
+#marketing task (coco `projects/marketing-feed`) learn about new posts
+through it. Found when that task was set up: sawti.app had posts in three
+languages and no feed, and phonicscore.com had a feed that no page linked.
+
+The preset checks every page after each build. A page whose schema.org
+`BlogPosting` is about the page itself (its `@id`, `url` or
+`mainEntityOfPage` is the page; a blog index listing posts is not one) must
+link, with `<link rel="alternate" type="application/rss+xml">`, a feed in the
+build that lists the page's canonical URL. Otherwise the build **fails**,
+naming each page and what is missing: no feed link, a feed that is not in the
+build, a feed on another site, or a feed that does not list the page. A
+build without posts logs nothing; one with posts logs how many it checked.
+
+The endpoint, one per language with posts (`src/pages/blog/rss.xml.ts`,
+`src/pages/de/blog/rss.xml.ts`, …):
+
+```ts
+import { rssResponse } from '@phonicscore/astro-kit/lib/rss.js';
+import { getPosts, postPath } from '../../lib/posts';
+import { site } from '../../site.config';
+
+export const GET = async () =>
+  rssResponse({
+    title: 'Sawti blog',
+    description: 'Singing, the voice and learning to sing with Sawti.',
+    site: site.url,
+    link: '/blog/',
+    self: '/blog/rss.xml',
+    language: 'en',
+    items: (await getPosts('en')).map((p) => ({
+      title: p.data.title,
+      link: postPath(p), // the page's canonical URL, trailing slash included
+      pubDate: p.data.date, // the day it was first published
+      description: p.data.description,
+    })),
+  });
+```
+
+And the link, in the layout so every page of the language carries it:
+
+```astro
+<SeoHead {...rest} feeds={[{ href: '/blog/rss.xml', title: 'Sawti blog' }]} />
+```
+
+- `link` is the page's canonical URL as SeoHead writes it, or the check
+  reports "does not list".
+- `pubDate` is the day the post was first published, from its source. A
+  date that changes with every build makes readers show old posts as new.
+- One feed per language, with that language's posts. A language without
+  posts gets no feed, and its pages link none.
+- RSS wants an e-mail address in `author`; leave it out rather than invent one.
+- A series that is not a blog (guides, release notes) can have a feed the
+  same way; the check only looks at `BlogPosting`.
+- Any RSS 2.0 or Atom feed passes the check, `@astrojs/rss` included.
 
 ## Analytics
 
@@ -725,7 +786,8 @@ They cover the language redirect (every redirect the sites rely on, and that
 no address leads off the site), the default share-card fonts (every letter
 of the sites' Latin-script languages), the Usermaven storage guard, run as the
 text the page gets, with a stand-in Storage, and the video rule's check over
-small pages and a temporary build folder. The weekly update compares a
+small pages and a temporary build folder, and the feed writer and the feed
+rule's check the same way. The weekly update compares a
 site's pages, not what its Worker answers, so a Worker's behaviour is checked
 only here.
 `test/` is not part of the package a site installs.
@@ -748,7 +810,9 @@ only here.
   nothing in the visitor's browser (see "Analytics"). The video check runs on
   every site too (1.15.0, Thomas's rule of 2026-11-18): it changes no output,
   and fails a build only on a `VideoObject` that Google would reject (see
-  "Videos").
+  "Videos"). So does the feed check (1.17.0, Thomas's rule of 2026-11-19): it
+  changes no output, and fails a build only on a blog post that no feed it
+  links lists (see "Feeds").
 - **No Tailwind Plus code — ever.** This repository is public. The Tailwind Plus
   licence covers using its components in our own projects, not redistributing
   them — and a public package is redistribution. Components built from a

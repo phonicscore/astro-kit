@@ -4,8 +4,9 @@
  *
  * One integration brings the whole toolchain: icons, the i18n-aware sitemap,
  * the SEO/GEO checks + llms.txt, Tailwind v4, the content transforms, the
- * share cards and the video rule (a build fails on a schema.org VideoObject
- * without name, thumbnailUrl or uploadDate). A site lists only
+ * share cards, the video rule (a build fails on a schema.org VideoObject
+ * without name, thumbnailUrl or uploadDate) and the feed rule (a build fails
+ * on a blog post that links no feed listing it). A site lists only
  * `phonicscore({...})` in astro.config.mjs.
  * Adding an integration HERE reaches every site on its next
  * `npm update @phonicscore/astro-kit` — that is the whole point of this
@@ -20,6 +21,7 @@ import tailwindcss from '@tailwindcss/vite';
 import { unified } from '@astrojs/markdown-remark';
 import rehypeContent from './lib/rehype-content.mjs';
 import { checkVideos } from './lib/video-check.js';
+import { checkFeeds } from './lib/feed-check.js';
 
 /**
  * @typedef {object} KitOptions
@@ -191,6 +193,8 @@ export default function phonicscore(options) {
       'astro:build:done': async ({ dir, logger }) => {
         // The video rule (README "Videos"): throws, so the build fails.
         await checkVideos(dir, buildStart, logger);
+        // The feed rule (README "Feeds"): every blog post is in a feed it links.
+        await checkFeeds(dir, logger);
 
         if (options.ogImages !== false) await (await ogCards()).write(dir, logger);
 
