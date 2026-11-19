@@ -19,14 +19,14 @@ import { checkFeeds, feedLinks, readPage, samePage } from '../lib/feed-check.js'
 
 const SITE = 'https://example.org';
 
-const post = (url, feeds = [], type = 'BlogPosting') =>
+const post = (url, feeds = [], type = 'BlogPosting', datePublished) =>
   `<!doctype html><html><head><link rel="canonical" href="${url}">${feeds
     .map((f) => `<link rel="alternate" type="application/rss+xml" title="Blog" href="${f}">`)
     .join('')}<script type="application/ld+json">${JSON.stringify({
     '@context': 'https://schema.org',
     '@graph': [
       { '@type': 'WebPage', '@id': url },
-      { '@type': type, '@id': `${url}#article`, mainEntityOfPage: { '@id': url }, headline: 'A post' },
+      { '@type': type, '@id': `${url}#article`, mainEntityOfPage: { '@id': url }, headline: 'A post', ...(datePublished ? { datePublished } : {}) },
     ],
   })}</script></head><body><h1>A post</h1></body></html>`;
 
@@ -131,7 +131,7 @@ test('checkFeeds: no feed link, a missing feed, a feed without the post, a feed 
     build({
       'blog/a/index.html': post('https://example.org/blog/a/'),
       'blog/b/index.html': post('https://example.org/blog/b/', ['/blog/feed.xml']),
-      'de/blog/c/index.html': post('https://example.org/de/blog/c/', ['/blog/rss.xml']),
+      'de/blog/c/index.html': post('https://example.org/de/blog/c/', ['/blog/rss.xml'], 'BlogPosting', '2026-11-18T08:00:00Z'),
       'blog/d/index.html': post('https://example.org/blog/d/', ['https://feeds.example.net/blog.xml']),
       'blog/rss.xml': feed(['/blog/a/']),
     }),
@@ -139,7 +139,7 @@ test('checkFeeds: no feed link, a missing feed, a feed without the post, a feed 
       assert.match(err.message, /4 blog posts without a feed/);
       assert.match(err.message, /\/blog\/a\/index.html: links no feed/);
       assert.match(err.message, /\/blog\/b\/index.html: \/blog\/feed.xml is not in the build/);
-      assert.match(err.message, /\/de\/blog\/c\/index.html: \/blog\/rss.xml does not list https:\/\/example.org\/de\/blog\/c\//);
+      assert.match(err.message, /\/de\/blog\/c\/index.html: \/blog\/rss.xml does not list https:\/\/example.org\/de\/blog\/c\/, though it lists older posts/);
       assert.match(err.message, /\/blog\/d\/index.html: https:\/\/feeds.example.net\/blog.xml is on another site/);
       return true;
     }
@@ -154,4 +154,29 @@ test('checkFeeds: one of several linked feeds is enough; Atom counts', async () 
     'atom.xml': atom,
   });
   assert.deepEqual(lines, ['1 blog post checked: each is in a feed it links.']);
+});
+
+test('checkFeeds: a feed may stop after its newest posts, but not skip a newer one', async () => {
+  // feed() dates its items 2026-11-10, -11, -12 …
+  const capped = feed(['/blog/new/', '/blog/newer/']);
+  assert.deepEqual(
+    await build({
+      'blog/new/index.html': post('https://example.org/blog/new/', ['/blog/rss.xml'], 'BlogPosting', '2026-11-10T08:00:00Z'),
+      'blog/old/index.html': post('https://example.org/blog/old/', ['/blog/rss.xml'], 'BlogPosting', '2023-09-19T00:00:00Z'),
+      'blog/rss.xml': capped,
+    }),
+    ['2 blog posts checked: each is in a feed it links.']
+  );
+  await assert.rejects(
+    build({
+      'blog/new/index.html': post('https://example.org/blog/new/', ['/blog/rss.xml'], 'BlogPosting', '2026-11-10T08:00:00Z'),
+      'blog/skipped/index.html': post('https://example.org/blog/skipped/', ['/blog/rss.xml'], 'BlogPosting', '2026-11-10T12:00:00Z'),
+      'blog/rss.xml': capped,
+    }),
+    /\/blog\/skipped\/index.html: \/blog\/rss.xml does not list https:\/\/example.org\/blog\/skipped\/, though it lists older posts/
+  );
+  await assert.rejects(
+    build({ 'blog/a/index.html': post('https://example.org/blog/a/', ['/blog/rss.xml']), 'blog/rss.xml': feed([]) }),
+    /\/blog\/rss.xml lists no posts/
+  );
 });

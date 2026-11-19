@@ -280,10 +280,13 @@ The preset checks every page after each build. A page whose schema.org
 `BlogPosting` is about the page itself (its `@id`, `url` or
 `mainEntityOfPage` is the page; a blog index listing posts is not one) must
 link, with `<link rel="alternate" type="application/rss+xml">`, a feed in the
-build that lists the page's canonical URL. Otherwise the build **fails**,
-naming each page and what is missing: no feed link, a feed that is not in the
-build, a feed on another site, or a feed that does not list the page. A
-build without posts logs nothing; one with posts logs how many it checked.
+build that lists the page's canonical URL. A feed may stop after its newest
+posts (christaprameshuber.ch lists 50 of 131): a post dated on or before the
+feed's oldest item passes, by the `datePublished` of its `BlogPosting`. Otherwise the
+build **fails**, naming each page and what is missing: no feed link, a feed
+that is not in the build, a feed on another site, a feed that lists no posts,
+or a feed that skips the page while it lists older ones. A build without
+posts logs nothing; one with posts logs how many it checked.
 
 The endpoint, one per language with posts (`src/pages/blog/rss.xml.ts`,
 `src/pages/de/blog/rss.xml.ts`, …):

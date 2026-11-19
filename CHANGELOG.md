@@ -11,7 +11,8 @@ them on `npm update` and no major ever does by surprise.
   build). Thomas's rule: "if there is a blog, add a rss feed". A page whose
   schema.org `BlogPosting` is about the page itself has to link, with
   `<link rel="alternate" type="application/rss+xml">`, a feed in the build
-  that lists its canonical URL, or the build fails and names the page.
+  that lists its canonical URL, or the build fails and names the page. A
+  feed may stop after its newest posts; it may not skip a newer one.
   Sites without posts see no change. Of the kit sites, phonicscore.com
   (a feed no page linked) and sawti.app (no feed) need their own change
   before they take this version; musicxml.tools and christaprameshuber.ch
