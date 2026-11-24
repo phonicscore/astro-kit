@@ -12,7 +12,7 @@ already wired to the kit.
 
 | Part | Import | What it gives a site |
 |---|---|---|
-| Integration preset | `@phonicscore/astro-kit` | astro-icon, the i18n-aware sitemap, SEO/GEO build checks + `llms.txt`, Tailwind v4, the content transforms, the video rule (the build fails on a `VideoObject` without `name`, `thumbnailUrl` or `uploadDate`), the feed rule (the build fails on a blog post that is in no feed it links) — one line in `astro.config.mjs` |
+| Integration preset | `@phonicscore/astro-kit` | astro-icon, the i18n-aware sitemap, SEO/GEO build checks + `llms.txt`, Tailwind v4, the content transforms, the video rule (the build fails on a `VideoObject` without `name`, `thumbnailUrl` or `uploadDate`), the feed rule (the build fails on a blog post that is in no feed it links), the proxy note (the build warns when the site's Worker carries its own Usermaven proxy) — one line in `astro.config.mjs` |
 | Share cards | `ogImages` option of the preset | a 1200×630 link-preview PNG for every page at `/og/<slug>.png`, themed per site; on by default |
 | `SeoHead` | `…/components/SeoHead.astro` | title, description, canonical, hreflang, Open Graph + Twitter cards, schema.org graph, favicons; `og:type` article with its times for article pages; `feeds` links the blog's RSS feed |
 | Feeds | `…/lib/rss.js` | `rssResponse()` writes a blog's RSS 2.0 feed from an Astro endpoint, newest post first |
@@ -23,6 +23,7 @@ already wired to the kit.
 | Base styles | `…/styles/base.css` | underlined text links, long words that break, focus rings, the flyout hover bridge, layout for the content transforms |
 | Content transforms | `…/lib/rehype-content.mjs` | rebuilds image grids, stat rows, cards, media splits and process steps from flat Markdown (applied by the preset) |
 | Helpers | `…/lib/og.js`, `…/lib/i18n.js` | OG-card slugs; UI-string translator and locale-from-path |
+| Usermaven proxy | `…/worker/analytics.ts` | `createAnalyticsProxy({ key })`: the site's `/um/` Worker route to Usermaven, for its own workspace only; a site that proxies its statistics uses this one, never a copy |
 | Contact Worker | `…/worker/contact.ts` + `schema.sql` | POST handler: honeypot, Turnstile, rate limit, D1 log, Resend delivery |
 | Family palette | `…/styles/family.css`, `…/styles/themes/<product>.css` | opt-in: the stage every .music site shares, the four product keys, and each product's curtain and light |
 | Dark mode | `…/components/ThemeHead.astro`, `ThemeToggle.astro`, `…/lib/score-scheme.js` | opt-in: light or dark before the first paint (the visitor's pick, else the system), the header toggle, OSMD scores in the site's dark tokens |
@@ -340,6 +341,102 @@ So `Analytics` runs a small guard before the loader (`lib/usermaven-guard.js`,
 Thomas, 2026-11-17): every write to a key starting with `usermaven_` is
 dropped, the queue stays in memory, and entries from earlier visits are
 removed. An event that cannot be sent is lost when the visitor leaves the page.
+
+## Usermaven proxy
+
+**Rule (Thomas, 2026-11-24):** a site that sends its statistics through its
+own domain uses the kit's proxy, `worker/analytics.ts`, never a copy of its
+own. There is one version of it, tested here, so a change reaches every site
+on its next update and no site keeps an older one.
+
+With the proxy, the visitor's browser talks to the site only. `Analytics`
+loads Usermaven's script from `/um/lib.js` and sends events to `/um/…`, and
+the site's Worker passes them on:
+
+| Path | Goes to | Answer |
+|---|---|---|
+| `GET /um/lib.js` | `t.usermaven.com/lib.js` | the script, kept a day by Cloudflare and the browser |
+| `POST /um/api/v1/event` | `events.usermaven.com/api/v1/event` | Usermaven's answer, never cached, without cookies |
+| `POST /um/api/v1/s2s/event` | `events.usermaven.com/api/v1/s2s/event` | the same, for the script's fallback path |
+| any other `/um/` path | nothing | 404 |
+
+What the proxy does and checks on every event:
+
+- **Privacy.** The visitor's IP goes along in `X-Forwarded-For`, because
+  Usermaven's cookieless mode counts visitors by a hash of IP address and
+  browser, and the Worker itself writes `ip_policy=strict` (Usermaven shortens
+  the IP before processing) and `cookie_policy=strict`, whatever the browser
+  asked for. No cookie goes up, no `Set-Cookie` comes down. A browser that
+  sends the Global Privacy Control signal (`Sec-GPC: 1`) is not counted: the
+  proxy answers 204 and forwards nothing.
+- **The site's own workspace only.** Every `token` in the query must be the
+  site's key (at least one), and so must an `api_key` there. The query that
+  goes upstream is written by the Worker: the key and the two policies,
+  nothing else. The body is parsed as JSON (not JSON: 400), so escapes are
+  read as what they say, and every `api_key` in it, at any depth, must be the
+  site's key. Anything else answers 403 and nothing goes upstream.
+- **Size.** A body over 64 KB answers 413: by its `Content-Length`, and by what
+  is read, whatever the header said.
+- **Failures.** When Usermaven can't be reached, the proxy answers 502 without
+  a body.
+
+An event the script sends passes as it is: a JSON array of events whose
+`api_key` is the site's key, posted with the site's `token`, goes upstream
+byte for byte. `test/analytics.test.mjs` holds the proxy to all of this, with
+a page view captured from a built page.
+
+In the site:
+
+```ts
+// worker/analytics.ts
+import { createAnalyticsProxy } from '@phonicscore/astro-kit/worker/analytics.ts';
+import { SECURITY_HEADERS } from './headers'; // only if the site ships its own public/_headers
+
+export const { isAnalyticsPath, analytics } = createAnalyticsProxy({
+  key: 'UMxxxxxxxx', // the workspace key, the same as usermavenKey for Analytics
+  headers: SECURITY_HEADERS,
+});
+```
+
+```ts
+// worker/index.ts, before the site's other routes
+import { analytics, isAnalyticsPath } from './analytics';
+
+if (isAnalyticsPath(url.pathname)) return analytics(request);
+```
+
+```astro
+<Analytics usermavenKey={key} isProduction={isProduction} src="/um/lib.js" trackingHost="/um" />
+```
+
+- `key` is the workspace key, public (it is in every page). The kit holds no
+  key.
+- `headers` are set on every answer the proxy builds, because
+  `public/_headers` reaches only what the static assets serve. Leave it out
+  and the answers carry the kit's baseline security headers, the same as its
+  `_headers`; a site with its own `public/_headers` passes the same set.
+- The Worker has to see `/um/*` before the static assets do: it is in
+  `"run_worker_first"` in `wrangler.jsonc` (`"/*"` covers it).
+- `astro dev` runs no Worker. Test with `wrangler dev` on a build, and answer
+  `/um/api/**` in the test browser, so no test visit reaches Usermaven.
+
+**The workspace setting that hides every proxied event.** Behind the Worker
+every event reaches Usermaven from a Cloudflare address, so Usermaven's
+Settings → Exclude Traffic → "Exclude proxy traffic from all stats" counts it
+as datacenter or proxy traffic and hides it, while the proxy still gets
+`200 {"status":"Ok"}`. In a workspace whose site uses the proxy, only "Search
+Engine Robots" may be ticked there; VPN, TOR, Datacenter, Public Proxies and
+Web Proxies stay unticked. It has hidden every page view of two kit sites
+after their move to the proxy. The setting only hides events: unticking
+brings the history back. Check it on the day a site goes onto `/um/`, with a
+test visit that shows up in Usermaven itself.
+
+**The build note.** After every build the preset looks through the site's
+`worker/` folder. A file that names `events.usermaven.com` and does not import
+`@phonicscore/astro-kit/worker/analytics.ts` gets one warning, naming the
+file and this section. The build goes on: sites still carrying their own
+module keep building while they move. **In a later release the warning
+becomes a build failure**, once the sites use the kit's proxy.
 
 ## Dark mode and languages
 
@@ -790,7 +887,8 @@ no address leads off the site), the default share-card fonts (every letter
 of the sites' Latin-script languages), the Usermaven storage guard, run as the
 text the page gets, with a stand-in Storage, and the video rule's check over
 small pages and a temporary build folder, and the feed writer and the feed
-rule's check the same way. The weekly update compares a
+rule's check the same way, the Usermaven proxy with `fetch` replaced (nothing
+reaches Usermaven), and the proxy note over temporary site folders. The weekly update compares a
 site's pages, not what its Worker answers, so a Worker's behaviour is checked
 only here.
 `test/` is not part of the package a site installs.
@@ -815,7 +913,9 @@ only here.
   and fails a build only on a `VideoObject` that Google would reject (see
   "Videos"). So does the feed check (1.17.0, Thomas's rule of 2026-11-19): it
   changes no output, and fails a build only on a blog post that no feed it
-  links lists (see "Feeds").
+  links lists (see "Feeds"). So does the proxy note (1.18.0, Thomas's rule of
+  2026-11-24): it changes no output and only warns, naming a Worker file that
+  carries its own Usermaven proxy (see "Usermaven proxy").
 - **No Tailwind Plus code — ever.** This repository is public. The Tailwind Plus
   licence covers using its components in our own projects, not redistributing
   them — and a public package is redistribution. Components built from a

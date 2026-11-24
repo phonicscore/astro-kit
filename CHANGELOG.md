@@ -5,6 +5,45 @@ Versions are git tags, and follow semver: patch = fixes, minor = features
 own code. Sites depend on `#semver:^1.0.0`, so every patch and minor reaches
 them on `npm update` and no major ever does by surprise.
 
+## 1.18.0 — 2026-11-24
+
+- **The Usermaven proxy** (`worker/analytics.ts`). Thomas's rule: a site
+  that sends its statistics through its own domain uses the kit's proxy,
+  never a copy of its own. `createAnalyticsProxy({ key, headers? })` gives
+  the site's Worker `isAnalyticsPath()` and `analytics()` for `/um/`:
+  - `GET /um/lib.js`: Usermaven's script, kept a day;
+  - `POST /um/api/v1/event` and `/um/api/v1/s2s/event`: forwarded with the
+    visitor's IP in `X-Forwarded-For`, no cookies either way, the answer
+    never cached; `Sec-GPC: 1` answers 204 and forwards nothing;
+  - only the site's own workspace: every `token` and every `api_key` in the
+    query is the site's key; the upstream query is written by the Worker (the
+    key, `cookie_policy=strict`, `ip_policy=strict`, nothing else); the body
+    is parsed as JSON (otherwise 400) and every `api_key` in it, at any
+    depth, is the site's key (otherwise 403, nothing forwarded);
+  - a body over 64 KB answers 413, by its `Content-Length` and by what is
+    read; upstream failures answer 502 without a body; any other `/um/` path
+    404.
+  Every answer carries the kit's baseline security headers, or the set the
+  site passes as `headers`. An event the script sends goes upstream byte for
+  byte, as before. The kit holds no key.
+- **The proxy note** (`lib/analytics-check.js`, run by the preset after
+  every build). A file in the site's `worker/` folder that names
+  `events.usermaven.com` and does not import the kit's proxy gets one
+  warning, naming the file and the README section. **A warning, not a
+  failure:** sites still carrying their own module build as before. A later
+  release turns it into a build failure, once the sites have moved.
+- README "Usermaven proxy": what the proxy does, the lines a site needs, and
+  the Usermaven workspace setting that hides every proxied event ("Exclude
+  proxy traffic": only "Search Engine Robots" may be ticked).
+  `test/analytics.test.mjs` (38 tests, `fetch` replaced, so nothing reaches
+  Usermaven; a captured page view with a neutral key) and
+  `test/analytics-check.test.mjs` (5).
+
+Moving a site: replace its own `worker/analytics.ts` with
+`export const { isAnalyticsPath, analytics } = createAnalyticsProxy({ key })`
+(plus `headers` if it ships its own `public/_headers`); `worker/index.ts`
+stays as it is. `npm test` passes (118, 43 new).
+
 ## 1.17.0 — 2026-11-19
 
 - **The feed rule** (`lib/feed-check.js`, run by the preset after every
