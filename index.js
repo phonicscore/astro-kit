@@ -5,8 +5,9 @@
  * One integration brings the whole toolchain: icons, the i18n-aware sitemap,
  * the SEO/GEO checks + llms.txt, Tailwind v4, the content transforms, the
  * share cards, the video rule (a build fails on a schema.org VideoObject
- * without name, thumbnailUrl or uploadDate) and the feed rule (a build fails
- * on a blog post that links no feed listing it). A site lists only
+ * without name, thumbnailUrl or uploadDate), the feed rule (a build fails
+ * on a blog post that links no feed listing it) and the proxy note (a build
+ * warns when the site's Worker carries its own Usermaven proxy). A site lists only
  * `phonicscore({...})` in astro.config.mjs.
  * Adding an integration HERE reaches every site on its next
  * `npm update @phonicscore/astro-kit` — that is the whole point of this
@@ -22,6 +23,7 @@ import { unified } from '@astrojs/markdown-remark';
 import rehypeContent from './lib/rehype-content.mjs';
 import { checkVideos } from './lib/video-check.js';
 import { checkFeeds } from './lib/feed-check.js';
+import { checkAnalyticsProxy } from './lib/analytics-check.js';
 
 /**
  * @typedef {object} KitOptions
@@ -195,6 +197,8 @@ export default function phonicscore(options) {
         await checkVideos(dir, buildStart, logger);
         // The feed rule (README "Feeds"): every blog post is in a feed it links.
         await checkFeeds(dir, logger);
+        // The proxy note (README "Usermaven proxy"): a warning only, never a failure yet.
+        if (astroConfig) await checkAnalyticsProxy(astroConfig.root, logger);
 
         if (options.ogImages !== false) await (await ogCards()).write(dir, logger);
 
