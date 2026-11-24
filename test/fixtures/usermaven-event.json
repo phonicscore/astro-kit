@@ -1,0 +1,12 @@
+{
+ "note": "A page view in the shape Usermaven's script sends it from a built kit page (production build under wrangler dev, 2026-11-16; intercepted in the browser, nothing forwarded). The workspace key, the host and the page title are replaced by neutral ones. Used by test/analytics.test.mjs.",
+ "method": "POST",
+ "path": "/um/api/v1/event?token=UMsitekey0&cookie_policy=strict&ip_policy=strict",
+ "headers": {
+  "content-type": "application/json",
+  "origin": "https://site.test",
+  "referer": "https://site.test/",
+  "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36"
+ },
+ "body": "[{\"event_id\":\"6r6k1q1j6k\",\"user\":{\"anonymous_id\":\"\"},\"company\":{},\"ids\":{},\"utc_time\":\"2026-11-16T18:20:09.670Z\",\"local_tz_offset\":-60,\"api_key\":\"UMsitekey0\",\"src\":\"usermaven\",\"event_type\":\"pageview\",\"namespace\":\"default\",\"event_attributes\":{\"url\":\"https://site.test/\",\"referrer\":\"\",\"title\":\"Example - Example\"},\"referer\":\"\",\"url\":\"https://site.test/\",\"page_title\":\"Example - Example\",\"doc_path\":\"/\",\"doc_host\":\"site.test\",\"doc_search\":\"\",\"screen_resolution\":\"1280x720\",\"vp_size\":\"1280x720\",\"user_agent\":\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36\",\"user_language\":\"en-US\",\"doc_encoding\":\"UTF-8\",\"utm\":{}}]"
+}
