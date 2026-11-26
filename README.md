@@ -24,7 +24,7 @@ already wired to the kit.
 | Content transforms | `…/lib/rehype-content.mjs` | rebuilds image grids, stat rows, cards, media splits and process steps from flat Markdown (applied by the preset) |
 | Helpers | `…/lib/og.js`, `…/lib/i18n.js` | OG-card slugs; UI-string translator and locale-from-path |
 | Usermaven proxy | `…/worker/analytics.ts` | `createAnalyticsProxy({ key })`: the site's `/um/` Worker route to Usermaven, for its own workspace only; a site that proxies its statistics uses this one, never a copy |
-| Contact Worker | `…/worker/contact.ts` + `schema.sql` | POST handler: honeypot, Turnstile, rate limit, D1 log, Resend delivery |
+| Contact Worker | `…/worker/contact.ts` + `schema.sql` | POST handler: honeypot, Turnstile, rate limit, D1 log, Resend delivery; `contactCleanup()` for the hourly cron: IP addresses go after a day, stored submissions after 30 days |
 | Family palette | `…/styles/family.css`, `…/styles/themes/<product>.css` | opt-in: the stage every .music site shares, the four product keys, and each product's curtain and light |
 | Dark mode | `…/components/ThemeHead.astro`, `ThemeToggle.astro`, `…/lib/score-scheme.js` | opt-in: light or dark before the first paint (the visitor's pick, else the system), the header toggle, OSMD scores in the site's dark tokens |
 | Newsletter | `…/components/NewsletterForm.astro`, `…/worker/newsletter.ts` | the footer sign-up for a site's Tarvent audience with double opt-in, the notice that says to confirm (and to look in the spam folder), one reminder for whoever hasn't confirmed a day later, and the deletion of sign-ups still unconfirmed after 30 days |
@@ -438,6 +438,40 @@ test visit that shows up in Usermaven itself.
 file and this section. The build goes on: sites still carrying their own
 module keep building while they move. **In a later release the warning
 becomes a build failure**, once the sites use the kit's proxy.
+
+## Contact form cleanup
+
+`createContactWorker` keeps every submission in D1, with the visitor's IP
+address and browser, for the rate limit and so that nothing is lost when the
+mail fails. `contactCleanup()` keeps that short (Thomas, 2026-11-26, as
+sawti.app keeps its messages): once an hour the IP address leaves submissions
+older than a day, and submissions older than 30 days are deleted. The mail in
+the site's mailbox is not touched.
+
+```ts
+// worker/index.ts: the site's own default export around the contact Worker
+import { contactCleanup, createContactWorker } from '@phonicscore/astro-kit/worker/contact.ts';
+
+const contact = createContactWorker({ paths: ..., defaultTo: ..., defaultFrom: ... });
+
+export default {
+  fetch: (request, env) => contact.fetch(request, env),
+  async scheduled(controller, env, ctx) {
+    ctx.waitUntil(contactCleanup(env)); // or contactCleanup(env, { ipAfterHours, deleteAfterDays })
+  },
+};
+```
+
+```jsonc
+// wrangler.jsonc: hourly, at any minute
+"triggers": { "crons": ["23 * * * *"] }
+```
+
+Each run writes one `contact-cleanup:` line to Workers Logs with the counts
+(never an address or a message), each step runs even if the other fails, and
+nothing throws. `0` for `ipAfterHours` or `deleteAfterDays` switches that step
+off. The site's privacy page says it in its own words: the IP address for a
+day, the stored message for 30 days.
 
 ## Newsletter
 
@@ -1019,7 +1053,7 @@ text the page gets, with a stand-in Storage, and the video rule's check over
 small pages and a temporary build folder, and the feed writer and the feed
 rule's check the same way, the Usermaven proxy with `fetch` replaced (nothing
 reaches Usermaven), the proxy note over temporary site folders, and the newsletter sign-up and its
-reminder with `fetch` replaced (nothing reaches Tarvent). The weekly update compares a
+reminder with `fetch` replaced (nothing reaches Tarvent), and the contact form's cleanup over Node's own SQLite with the kit's `schema.sql`. The weekly update compares a
 site's pages, not what its Worker answers, so a Worker's behaviour is checked
 only here.
 `test/` is not part of the package a site installs.
