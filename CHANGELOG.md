@@ -5,6 +5,48 @@ Versions are git tags, and follow semver: patch = fixes, minor = features
 own code. Sites depend on `#semver:^1.0.0`, so every patch and minor reaches
 them on `npm update` and no major ever does by surprise.
 
+## 1.19.0 — 2026-11-26
+
+- **The newsletter sign-up** (`worker/newsletter.ts`,
+  `components/NewsletterForm.astro`), as opensheetmusiceducation.org built
+  it (Thomas, 2026-11-26: every site's newsletter the same way).
+  `createNewsletter({ locales, endpoint?, remindAfterHours?, reminderTag?, headers? })`
+  gives the site's Worker:
+  - `isNewsletterPath()` and `newsletter()` for `POST /api/newsletter`: the
+    address goes into the site's Tarvent audience (`createContact`) with the
+    page's language and the visitor's IPv4 address; Tarvent's double opt-in
+    mails the confirm link. JSON answers: `{"ok":true}`, also for an address
+    that is already there and for a filled honeypot (which sends nothing),
+    or `{"ok":false}` with `invalid`, `rate`, `failed`, `origin` or
+    `method`. POST only, same origin only, bodies over 16 KB refused, an
+    optional rate-limit binding `NEWSLETTER_LIMIT` per IPv4 address or IPv6
+    /64. A refused language code signs the address up without it.
+  - `doiReminder(scheduledTime, env)` for an hourly Cron Trigger: the
+    unconfirmed sign-ups of one hour, 24 to 25 hours ago, get Tarvent's
+    confirm mail once more (`resendDoiEmail` with their ids, never without),
+    then the tag `confirm reminder sent` (`addContactTag`, only when every
+    mail went out), and every run writes one `doi-reminder:` line to Workers
+    Logs. It never throws, and `DOI_REMINDER_DRY_RUN=1` only logs.
+  No log line holds an email address.
+- `NewsletterForm`: one email field and a button, the honeypot, and after the
+  sign-up a notice in the field's place that gets the focus: confirm with the
+  link in the mail, look in the spam folder (Thomas, 2026-11-26: that
+  message has to stand out), with a mail icon. It sends the Usermaven event
+  `newsletter_signup_sent` with the page's language. Words through `texts`,
+  look through `classes`, the note under the form (privacy link) in the slot.
+  Of its words, only `hidden` becomes CSS in a site (Tailwind's scanner over
+  the old and new `components/`, through each site's design system), and all
+  six kit sites have it already.
+- README "Newsletter": what happens, the lines a site needs (the Worker,
+  `wrangler.jsonc`, the form), the key and the audience settings.
+  `test/newsletter.test.mjs` (30 tests, `fetch` replaced, so nothing reaches
+  Tarvent).
+
+Moving a site with its own copy (opensheetmusiceducation.org): replace
+`worker/newsletter.ts` and `worker/doi-reminder.ts` with
+`export const { isNewsletterPath, newsletter, doiReminder } = createNewsletter({ locales })`,
+and its form with `NewsletterForm`. `npm test` passes (148, 30 new).
+
 ## 1.18.0 — 2026-11-24
 
 - **The Usermaven proxy** (`worker/analytics.ts`). Thomas's rule: a site

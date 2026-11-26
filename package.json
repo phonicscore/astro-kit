@@ -1,7 +1,7 @@
 {
   "name": "@phonicscore/astro-kit",
-  "version": "1.18.0",
-  "description": "Shared Astro foundation for PhonicScore websites: one integration preset, the SEO head and share cards, content transforms, base styles, the opt-in dark mode and language menu, and the contact-form, language and Usermaven proxy Workers.",
+  "version": "1.19.0",
+  "description": "Shared Astro foundation for PhonicScore websites: one integration preset, the SEO head and share cards, content transforms, base styles, the opt-in dark mode and language menu, and the contact-form, language, Usermaven proxy and newsletter Workers, with the newsletter form.",
   "type": "module",
   "private": true,
   "license": "UNLICENSED",

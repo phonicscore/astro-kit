@@ -1,0 +1,141 @@
+---
+/**
+ * The newsletter sign-up for a site's footer: one email field and a button
+ * (Thomas, 2026-11-17: "keep it as simple as possible"). It posts to the
+ * kit's newsletter Worker (worker/newsletter.ts), which adds the address to
+ * the site's audience in Tarvent with the page's language; Tarvent then mails
+ * the confirm link.
+ *
+ * Once Tarvent took the address, the field gives way to a notice: confirm
+ * with the link in the mail, and look in the spam folder if it isn't there
+ * (Thomas, 2026-11-26: that message has to stand out). Focus moves to the
+ * notice, so a screen reader reads it at once, and the form sends the
+ * Usermaven event `newsletter_signup_sent` with the page's language. A
+ * failure is read out below the field, and the button works again.
+ *
+ * The site passes the words in the page's language through `texts`, and the
+ * look through `classes`. The slot holds the note under the form, such as
+ * "You'll get a link to confirm" with the privacy link. The kit's rules only
+ * keep the trap field out of sight, the notice out of sight until it is
+ * used, the empty status line out of the page and the mail icon at 2rem
+ * unless `classes.icon` sizes it. Those rules have no specificity and sit in
+ * the components layer: above Tailwind's reset, below anything the site
+ * writes.
+ */
+interface Props {
+  /** The page's language: one of the `locales` the site gave the Worker. */
+  lang: string;
+  /** The form's words, in the page's language. */
+  texts: {
+    /** The field's name, read out by screen readers and shown as its placeholder: "Email address". */
+    label: string;
+    /** "Subscribe". */
+    button: string;
+    /** The notice's first line, its biggest words: "Almost done: confirm your address". */
+    sentTitle: string;
+    /** The rest of the notice: the link in the mail, the spam folder, the sender. */
+    sentText: string;
+    /** When Tarvent or the network failed: "That didn't work. Please try again in a moment." */
+    failed: string;
+    /** When the Worker refused the address: "Please check the email address." */
+    invalid: string;
+  };
+  /** The Worker's POST target. Default: /api/newsletter */
+  endpoint?: string;
+  /** The email field's id; a page with two forms gives each its own. Default: newsletter-email */
+  id?: string;
+  classes?: {
+    form?: string;
+    /** The field and the button. */
+    row?: string;
+    input?: string;
+    button?: string;
+    /** The line a failure is read out in. */
+    status?: string;
+    /** The notice after the sign-up: its box, the mail icon and the two lines. */
+    sent?: string;
+    icon?: string;
+    sentTitle?: string;
+    sentText?: string;
+  };
+}
+
+const { lang, texts, endpoint = '/api/newsletter', id = 'newsletter-email', classes = {} } = Astro.props;
+---
+
+<form
+  class={classes.form}
+  method="post"
+  action={endpoint}
+  data-newsletter
+  data-lang={lang}
+  data-failed={texts.failed}
+  data-invalid={texts.invalid}
+>
+  <input type="hidden" name="lang" value={lang} />
+  {/* A field people don't see: bots that fill every field get a quiet "ok" and nothing happens. */}
+  <div data-newsletter-trap aria-hidden="true">
+    <label>Website <input type="text" name="website" tabindex="-1" autocomplete="off" /></label>
+  </div>
+  <div class={classes.row} data-newsletter-row>
+    <label for={id} class="sr-only">{texts.label}</label>
+    <input
+      id={id}
+      class={classes.input}
+      type="email"
+      name="email"
+      required
+      maxlength="320"
+      autocomplete="email"
+      inputmode="email"
+      placeholder={texts.label}
+    />
+    <button type="submit" class={classes.button}>{texts.button}</button>
+  </div>
+  <p class={classes.status} data-newsletter-status role="status" aria-live="polite"></p>
+  <div class={classes.sent} data-newsletter-sent tabindex="-1" hidden>
+    <svg
+      class={classes.icon}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.8"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="3" y="5" width="18" height="14" rx="2"></rect>
+      <path d="m3.5 6.5 8.5 6.5 8.5-6.5"></path>
+    </svg>
+    <p class={classes.sentTitle}>{texts.sentTitle}</p>
+    <p class={classes.sentText}>{texts.sentText}</p>
+  </div>
+  <slot />
+</form>
+
+<style is:global>
+  /* Tailwind's own order, in case this sheet comes first: a layer named here
+     first would otherwise rank below the ones Tailwind names after it. */
+  @layer theme, base, components, utilities;
+
+  @layer components {
+    :where([data-newsletter-trap]) {
+      display: none;
+    }
+    :where([data-newsletter-status]:empty) {
+      display: none;
+    }
+    /* The notice waits until the sign-up went through, whatever display the site gives its box. */
+    :where([data-newsletter] [hidden]) {
+      display: none !important;
+    }
+    :where([data-newsletter-sent] > svg) {
+      width: 2rem;
+      height: 2rem;
+    }
+  }
+</style>
+
+<script>
+  import '../lib/newsletter-form.js';
+</script>
