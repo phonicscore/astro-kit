@@ -10,6 +10,10 @@
  *   import { createContactWorker } from '@phonicscore/astro-kit/worker/contact.ts';
  *   export default createContactWorker({ paths: ..., defaultTo: ..., defaultFrom: ... });
  *
+ * contactCleanup() is the hourly cleanup of the stored submissions, for the
+ * site's Cron Trigger: IP addresses go after a day, submissions after 30 days
+ * (see below).
+ *
  * Bindings and secrets (set per site; secrets never go in the repo):
  *   ASSETS               static assets (always present)
  *   DB                   D1 database — apply worker/schema.sql to it
@@ -211,6 +215,75 @@ export function createContactWorker(options: ContactOptions) {
       return env.ASSETS.fetch(request);
     },
   };
+}
+
+export interface ContactCleanupOptions {
+  /**
+   * Hours after which a stored submission's IP address is removed. The rate
+   * limit only looks back ten minutes. 0 keeps them. Default: 24
+   */
+  ipAfterHours?: number;
+  /** Days after which a stored submission is deleted. 0 keeps them. Default: 30 */
+  deleteAfterDays?: number;
+}
+
+/**
+ * The cleanup of the stored submissions, for the site's hourly Cron Trigger
+ * (Thomas, 2026-11-26: as sawti.app keeps its messages): the IP address
+ * leaves a submission after a day, and the submission itself goes after 30
+ * days. The mail sent to the site's mailbox is not touched.
+ *
+ * Each step runs on its own: a failure is logged and the other step still
+ * runs. One `contact-cleanup:` line per run in Workers Logs, with counts,
+ * never content. Without a DB binding it says so and returns. Never throws.
+ *
+ *   // in the site Worker's scheduled handler:
+ *   ctx.waitUntil(contactCleanup(env));
+ */
+export async function contactCleanup(
+  env: Pick<ContactEnv, 'DB'>,
+  options: ContactCleanupOptions = {}
+): Promise<void> {
+  const ipAfterHours = options.ipAfterHours ?? 24;
+  const deleteAfterDays = options.deleteAfterDays ?? 30;
+  if (!env.DB) {
+    console.log('contact-cleanup: no DB binding, nothing stored');
+    return;
+  }
+  const parts: string[] = [];
+  if (ipAfterHours > 0) {
+    try {
+      const result = await env.DB.prepare(
+        `UPDATE contact_submissions SET ip = NULL WHERE ip IS NOT NULL AND created_at <= datetime('now', ?1)`
+      )
+        .bind(`-${ipAfterHours} hours`)
+        .run();
+      parts.push(`${changedRows(result)} IP addresses removed (older than ${ipAfterHours} h)`);
+    } catch (e) {
+      console.error('contact-cleanup: removing IP addresses failed', e);
+      parts.push('removing IP addresses failed');
+    }
+  }
+  if (deleteAfterDays > 0) {
+    try {
+      const result = await env.DB.prepare(
+        `DELETE FROM contact_submissions WHERE created_at <= datetime('now', ?1)`
+      )
+        .bind(`-${deleteAfterDays} days`)
+        .run();
+      parts.push(`${changedRows(result)} submissions deleted (older than ${deleteAfterDays} days)`);
+    } catch (e) {
+      console.error('contact-cleanup: deleting submissions failed', e);
+      parts.push('deleting submissions failed');
+    }
+  }
+  console.log(`contact-cleanup: ${parts.length ? parts.join('; ') : 'both steps off'}`);
+}
+
+/** The rows a D1 statement changed, from its result's `meta` (0 when D1 gives none). */
+function changedRows(result: unknown): number {
+  const n = (result as { meta?: { changes?: unknown } } | null)?.meta?.changes;
+  return typeof n === 'number' ? n : 0;
 }
 
 async function verifyTurnstile(secret: string, token: string, ip: string): Promise<boolean> {

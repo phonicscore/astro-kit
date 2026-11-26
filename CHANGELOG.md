@@ -5,6 +5,18 @@ Versions are git tags, and follow semver: patch = fixes, minor = features
 own code. Sites depend on `#semver:^1.0.0`, so every patch and minor reaches
 them on `npm update` and no major ever does by surprise.
 
+## 1.20.0 — 2026-11-26
+
+- **The contact form's cleanup** (`contactCleanup` in `worker/contact.ts`,
+  Thomas, 2026-11-26: keep submissions as briefly as sawti.app does). For
+  the site's hourly Cron Trigger: the IP address leaves stored submissions
+  older than a day, and submissions older than 30 days are deleted
+  (`contactCleanup(env, { ipAfterHours?, deleteAfterDays? })`, defaults 24
+  and 30, `0` switches a step off). One `contact-cleanup:` line per run with
+  counts, never content; each step runs even if the other fails; never
+  throws. A site calls it from its `scheduled` handler; nothing changes for a
+  site that doesn't. Tests run its SQL on Node's own SQLite with `schema.sql`.
+
 ## 1.19.0 — 2026-11-26
 
 - **The newsletter sign-up** (`worker/newsletter.ts`,
