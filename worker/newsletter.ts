@@ -6,9 +6,11 @@
  *   POST /api/newsletter   the footer form (components/NewsletterForm.astro):
  *                          one email address, the page's language, and a
  *                          honeypot field that people don't see
- *   doiReminder()          for the site's hourly Cron Trigger: addresses that
+ *   newsletterCron()       for the site's hourly Cron Trigger: addresses that
  *                          signed up 24 to 25 hours ago and still haven't
  *                          confirmed get Tarvent's confirm mail once more
+ *                          (doiReminder), and addresses still unconfirmed
+ *                          after 30 days are deleted (deleteUnconfirmed)
  *
  * The Worker adds the address to the site's audience in Tarvent, with the
  * page's language and the visitor's IPv4 address. The audience requires
@@ -26,25 +28,26 @@
  *   // worker/newsletter.ts in a site
  *   import { createNewsletter } from '@phonicscore/astro-kit/worker/newsletter.ts';
  *   import { locales } from '../src/i18n/locales';
- *   export const { isNewsletterPath, newsletter, doiReminder } = createNewsletter({ locales });
+ *   export const { isNewsletterPath, newsletter, newsletterCron } = createNewsletter({ locales });
  *
  *   // worker/index.ts
  *   if (isNewsletterPath(url.pathname)) return newsletter(request, env);
  *   // and in scheduled():
- *   ctx.waitUntil(doiReminder(controller.scheduledTime, env));
+ *   ctx.waitUntil(newsletterCron(controller.scheduledTime, env));
  *
  * What the site's Worker needs (wrangler.jsonc; secrets never go in the repo):
  *   TARVENT_API_KEY       secret: a key for the site's audience only, with the
- *                         rights to create, read and update contacts
+ *                         rights to view the audience, to create, read, update
+ *                         and delete contacts, and to create and view tags
  *   TARVENT_ACCOUNT_ID    var: the Tarvent account
  *   TARVENT_AUDIENCE_ID   var: the site's audience
  *   NEWSLETTER_LIMIT      optional rate-limit binding: sign-ups per visitor
  *                         address (IPv4, or the /64 of an IPv6 address)
- *   DOI_REMINDER_DRY_RUN  optional, "1" in .dev.vars: the reminder logs whom
- *                         it would remind and sends nothing
- * plus an hourly Cron Trigger (any minute) and Workers Logs, where the
- * reminder writes one `doi-reminder:` line per run. No line ever holds an
- * email address.
+ *   DOI_REMINDER_DRY_RUN  optional, "1" in .dev.vars: the cron logs whom it
+ *                         would remind or delete and changes nothing
+ * plus an hourly Cron Trigger (any minute) and Workers Logs, where every run
+ * writes one `doi-reminder:` line and one `doi-cleanup:` line. No line ever
+ * holds an email address.
  *
  * Types are kept light so sites build without @cloudflare/workers-types.
  * test/newsletter.test.mjs holds all of the above to account, with fetch
@@ -73,6 +76,8 @@ export interface NewsletterOptions {
   endpoint?: string;
   /** Hours from a sign-up to its one reminder. Default: 24 */
   remindAfterHours?: number;
+  /** Days after which a sign-up that is still unconfirmed is deleted; 0 keeps them. Default: 30 */
+  deleteUnconfirmedAfterDays?: number;
   /** The tag a reminded contact gets in Tarvent. Default: "confirm reminder sent" */
   reminderTag?: string;
   /**
@@ -87,8 +92,12 @@ export interface Newsletter {
   isNewsletterPath(pathname: string): boolean;
   /** The answer to the form. */
   newsletter(request: Request, env: NewsletterEnv): Promise<Response>;
+  /** The hourly run: doiReminder, then deleteUnconfirmed. Never throws: it logs. */
+  newsletterCron(scheduledTime: number, env: NewsletterEnv): Promise<void>;
   /** One reminder run, for the Cron Trigger's scheduledTime. Never throws: it logs. */
   doiReminder(scheduledTime: number, env: NewsletterEnv): Promise<void>;
+  /** Deletes the sign-ups still unconfirmed after `deleteUnconfirmedAfterDays`. Never throws: it logs. */
+  deleteUnconfirmed(scheduledTime: number, env: NewsletterEnv): Promise<void>;
 }
 
 export const TARVENT_GRAPHQL = 'https://api.tarvent.com/graphql';
@@ -97,9 +106,15 @@ export const DEFAULT_REMINDER_TAG = 'confirm reminder sent';
 export const MAX_SIGNUP_BODY = 16 * 1024;
 
 const HOUR = 3_600_000;
+const DAY = 24 * HOUR;
 const PAGE = 50;
 // Reading stops after 1,000 sign-ups in the window's 25 hours.
 const MAX_PAGES = 20;
+/**
+ * Deletions per run: one request each, so a run stays far below a Worker's
+ * subrequest limit (50 on the free plan). The next hour goes on where it stopped.
+ */
+export const MAX_DELETIONS_PER_RUN = 25;
 // Loose on purpose: the browser's type="email" check runs first, Tarvent checks again.
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const IPV4 = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
@@ -148,6 +163,11 @@ const CONTACTS = `query($i:GetAllContactsInput!, $after:String){
 const RESEND = `mutation($i:ResendDoiEmailInput!){
   resendDoiEmail(input:$i){ contactCount sendCount failCount } }`;
 const ADD_TAG = 'mutation($i:AddTagInput!){ addContactTag(input:$i) }';
+// Only the stale unconfirmed ones, oldest first: Tarvent filters, and each contact is checked again here.
+const STALE = `query($i:GetAllContactsInput!){
+  contacts(input:$i, first:${PAGE}, order:[{createdUtc:ASC}]){ nodes{ id status createdUtc } } }`;
+// One contact per call: an id-less bulk delete would act on the whole audience.
+const DELETE = 'mutation($i:DeleteContactInput!){ deleteContact(input:$i) }';
 
 const configured = (env: NewsletterEnv) =>
   Boolean(env.TARVENT_API_KEY && env.TARVENT_ACCOUNT_ID && env.TARVENT_AUDIENCE_ID);
@@ -204,6 +224,10 @@ export function createNewsletter(options: NewsletterOptions): Newsletter {
   }
   const endpoint = options.endpoint ?? '/api/newsletter';
   const remindAfterHours = options.remindAfterHours ?? 24;
+  const deleteAfterDays = options.deleteUnconfirmedAfterDays ?? 30;
+  if (!(deleteAfterDays === 0 || deleteAfterDays * 24 > remindAfterHours + 1)) {
+    throw new Error('createNewsletter: deleteUnconfirmedAfterDays must be 0 or come after the reminder');
+  }
   const reminderTag = options.reminderTag ?? DEFAULT_REMINDER_TAG;
   const extra = options.headers ?? BASELINE_SECURITY_HEADERS;
 
@@ -335,9 +359,72 @@ export function createNewsletter(options: NewsletterOptions): Newsletter {
     }
   }
 
+  /**
+   * Deletes the contacts that are still unconfirmed `deleteAfterDays` days after their sign-up.
+   * Tarvent picks them (status and age), and each one is checked again before it goes, so a
+   * filter Tarvent ever ignores can never delete a confirmed subscriber.
+   */
+  async function deleteUnconfirmed(scheduledTime: number, env: NewsletterEnv): Promise<void> {
+    try {
+      if (!deleteAfterDays) return;
+      if (!configured(env)) {
+        console.error('doi-cleanup: TARVENT_API_KEY or the Tarvent ids missing');
+        return;
+      }
+      const cutoff = Math.floor(scheduledTime / HOUR) * HOUR - deleteAfterDays * DAY;
+      const { contacts }: { contacts: { nodes: Contact[] } } = await tarvent<{ contacts: { nodes: Contact[] } }>(env, STALE, {
+        i: {
+          audienceId: env.TARVENT_AUDIENCE_ID,
+          criteria: {
+            operator: 'AND',
+            conditions: [
+              { fieldName: 'status', operator: 'EQUAL', value: 'PENDING_CONFIRM' },
+              { fieldName: 'createdUtc', operator: 'LESS_THAN', value: new Date(cutoff).toISOString() },
+            ],
+          },
+        },
+      });
+      const stale = contacts.nodes.filter((c) => c.status === 'PENDING_CONFIRM' && Date.parse(c.createdUtc) < cutoff);
+      const skipped = contacts.nodes.length - stale.length;
+      if (skipped) console.error(`doi-cleanup: Tarvent returned ${skipped} contacts that are confirmed or newer; kept them`);
+      const ids = stale.slice(0, MAX_DELETIONS_PER_RUN).map((c) => c.id);
+      const label = `unconfirmed sign-ups before ${iso(cutoff)}`;
+      if (!ids.length) {
+        console.log(`doi-cleanup: ${label}: none`);
+        return;
+      }
+      if (env.DOI_REMINDER_DRY_RUN === '1') {
+        console.log(`doi-cleanup: dry run, ${label}: would delete ${ids.length}: ${ids.join(', ')}`);
+        return;
+      }
+      const deleted: string[] = [];
+      const failed: string[] = [];
+      for (const id of ids) {
+        try {
+          await tarvent(env, DELETE, { i: { audienceId: env.TARVENT_AUDIENCE_ID, id } });
+          deleted.push(id);
+        } catch (e) {
+          failed.push(id);
+          console.error(`doi-cleanup: deleting ${id} failed:`, redact(e instanceof Error ? e.message : String(e)));
+        }
+      }
+      const more = stale.length > ids.length || contacts.nodes.length === PAGE ? ' (more next hour)' : '';
+      console.log(`doi-cleanup: ${label}: ${deleted.length} deleted, ${failed.length} failed${more}: ${deleted.join(', ')}`);
+    } catch (e) {
+      console.error('doi-cleanup: failed:', redact(e instanceof Error ? e.message : String(e)));
+    }
+  }
+
+  async function newsletterCron(scheduledTime: number, env: NewsletterEnv): Promise<void> {
+    await doiReminder(scheduledTime, env);
+    await deleteUnconfirmed(scheduledTime, env);
+  }
+
   return {
     isNewsletterPath: (pathname: string) => pathname === endpoint,
     newsletter,
+    newsletterCron,
     doiReminder,
+    deleteUnconfirmed,
   };
 }

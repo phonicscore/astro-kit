@@ -12,13 +12,17 @@
  * sites or bodies over the limit) and the reminder to its one rule: each
  * unconfirmed sign-up gets the confirm mail once, 24 to 25 hours later, and
  * Tarvent is never asked to mail or tag without the contacts' ids, because
- * without them it acts on the whole audience.
+ * without them it acts on the whole audience. The cleanup deletes only
+ * contacts that are still unconfirmed 30 days after their sign-up, one id per
+ * call, and checks each contact again, so a filter Tarvent ignored could
+ * never delete a confirmed subscriber.
  */
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, test } from 'node:test';
 import { BASELINE_SECURITY_HEADERS } from '../worker/analytics.ts';
 import {
   DEFAULT_REMINDER_TAG,
+  MAX_DELETIONS_PER_RUN,
   MAX_SIGNUP_BODY,
   TARVENT_GRAPHQL,
   createNewsletter,
@@ -29,7 +33,7 @@ import {
 
 const SITE = 'https://site.test';
 const ENV = { TARVENT_API_KEY: 'test-key', TARVENT_ACCOUNT_ID: '111', TARVENT_AUDIENCE_ID: '222' };
-const { isNewsletterPath, newsletter, doiReminder } = createNewsletter({ locales: ['en', 'de', 'ar'] });
+const { isNewsletterPath, newsletter, newsletterCron, doiReminder, deleteUnconfirmed } = createNewsletter({ locales: ['en', 'de', 'ar'] });
 
 /** What went to Tarvent, how the stand-in answers, and what the Worker logged. */
 let sent;
@@ -392,4 +396,102 @@ test('the reading stops after 20 pages', async () => {
   assert.equal(sent.filter((s) => /contacts\(/.test(s.query)).length, 20);
   assert.match(errors[0], /more than 1000 sign-ups to read, stopped/);
   assert.match(logs[0], /none unconfirmed/);
+});
+
+// The cleanup
+
+/** Tarvent as the cleanup meets it: the stale query's answer, then one delete per contact. */
+function cleanup(nodes, { failIds = [] } = {}) {
+  return (body) => {
+    if (/deleteContact/.test(body.query)) {
+      return failIds.includes(body.variables.i.id) ? fails('Not found') : data({ deleteContact: true });
+    }
+    if (/contacts\(/.test(body.query) && /createdUtc:ASC/.test(body.query)) return data({ contacts: { nodes } });
+    if (/contacts\(/.test(body.query)) return data({ contacts: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [] } });
+    throw new Error('unexpected query');
+  };
+}
+
+test('the cleanup deletes the sign-ups still unconfirmed after 30 days, one by one', async () => {
+  answer = cleanup([contact('s1', '2026-10-01T08:00:00Z'), contact('s2', '2026-10-27T11:59:00Z')]);
+  await deleteUnconfirmed(T, ENV);
+  const [query, ...deletes] = sent;
+  assert.deepEqual(query.variables.i.criteria, {
+    operator: 'AND',
+    conditions: [
+      { fieldName: 'status', operator: 'EQUAL', value: 'PENDING_CONFIRM' },
+      { fieldName: 'createdUtc', operator: 'LESS_THAN', value: '2026-10-27T12:00:00.000Z' },
+    ],
+  });
+  assert.equal(query.variables.i.audienceId, '222');
+  assert.deepEqual(deletes.map((d) => d.variables.i), [
+    { audienceId: '222', id: 's1' },
+    { audienceId: '222', id: 's2' },
+  ]);
+  assert.deepEqual(logs, ['doi-cleanup: unconfirmed sign-ups before 2026-10-27T12:00Z: 2 deleted, 0 failed: s1, s2']);
+});
+
+test('the cleanup never deletes a confirmed or newer contact, whatever Tarvent returns', async () => {
+  answer = cleanup([
+    contact('ok', '2026-10-01T08:00:00Z'),
+    contact('active', '2026-10-01T09:00:00Z', 'ACTIVE'),
+    contact('young', '2026-11-20T09:00:00Z'),
+  ]);
+  await deleteUnconfirmed(T, ENV);
+  assert.deepEqual(sent.slice(1).map((d) => d.variables.i.id), ['ok']);
+  assert.match(errors[0], /returned 2 contacts that are confirmed or newer; kept them/);
+});
+
+test('nothing stale: one line, no delete', async () => {
+  answer = cleanup([]);
+  await deleteUnconfirmed(T, ENV);
+  assert.equal(sent.length, 1);
+  assert.deepEqual(logs, ['doi-cleanup: unconfirmed sign-ups before 2026-10-27T12:00Z: none']);
+});
+
+test('at most 25 deletions a run; the next hour goes on', async () => {
+  answer = cleanup(Array.from({ length: 50 }, (_, i) => contact(`c${i}`, '2026-10-01T08:00:00Z')));
+  await deleteUnconfirmed(T, ENV);
+  assert.equal(sent.filter((s) => /deleteContact/.test(s.query)).length, MAX_DELETIONS_PER_RUN);
+  assert.match(logs[0], /25 deleted, 0 failed \(more next hour\)/);
+});
+
+test('a failed delete is logged and the others still go', async () => {
+  answer = cleanup([contact('a', '2026-10-01T08:00:00Z'), contact('b', '2026-10-02T08:00:00Z')], { failIds: ['a'] });
+  await deleteUnconfirmed(T, ENV);
+  assert.match(errors[0], /deleting a failed: Not found/);
+  assert.match(logs[0], /1 deleted, 1 failed: b$/);
+});
+
+test('the dry run deletes nothing', async () => {
+  answer = cleanup([contact('a', '2026-10-01T08:00:00Z')]);
+  await deleteUnconfirmed(T, { ...ENV, DOI_REMINDER_DRY_RUN: '1' });
+  assert.equal(sent.length, 1);
+  assert.match(logs[0], /dry run, .*would delete 1: a$/);
+});
+
+test('deleteUnconfirmedAfterDays: 0 keeps every sign-up; a day before the reminder is refused', async () => {
+  const keep = createNewsletter({ locales: ['en'], deleteUnconfirmedAfterDays: 0 });
+  await keep.deleteUnconfirmed(T, ENV);
+  assert.equal(sent.length, 0);
+  assert.throws(() => createNewsletter({ locales: ['en'], deleteUnconfirmedAfterDays: 1 }), /after the reminder/);
+  const week = createNewsletter({ locales: ['en'], deleteUnconfirmedAfterDays: 7 });
+  answer = cleanup([]);
+  await week.deleteUnconfirmed(T, ENV);
+  assert.equal(sent[0].variables.i.criteria.conditions[1].value, '2026-11-19T12:00:00.000Z');
+});
+
+test('a Tarvent failure in the cleanup is logged, never thrown', async () => {
+  answer = () => fails('Unauthorized');
+  await deleteUnconfirmed(T, ENV);
+  assert.match(errors[0], /^doi-cleanup: failed: Unauthorized/);
+});
+
+test('newsletterCron runs the reminder, then the cleanup', async () => {
+  answer = cleanup([contact('old', '2026-10-01T08:00:00Z')]);
+  await newsletterCron(T, ENV);
+  const kinds = sent.map((s) => (/createdUtc:ASC/.test(s.query) ? 'stale' : /deleteContact/.test(s.query) ? 'delete' : 'reminder'));
+  assert.deepEqual(kinds, ['reminder', 'stale', 'delete']);
+  assert.match(logs[0], /^doi-reminder: .* none unconfirmed$/);
+  assert.match(logs[1], /^doi-cleanup: .* 1 deleted/);
 });
