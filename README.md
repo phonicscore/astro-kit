@@ -27,7 +27,7 @@ already wired to the kit.
 | Contact Worker | `…/worker/contact.ts` + `schema.sql` | POST handler: honeypot, Turnstile, rate limit, D1 log, Resend delivery |
 | Family palette | `…/styles/family.css`, `…/styles/themes/<product>.css` | opt-in: the stage every .music site shares, the four product keys, and each product's curtain and light |
 | Dark mode | `…/components/ThemeHead.astro`, `ThemeToggle.astro`, `…/lib/score-scheme.js` | opt-in: light or dark before the first paint (the visitor's pick, else the system), the header toggle, OSMD scores in the site's dark tokens |
-| Newsletter | `…/components/NewsletterForm.astro`, `…/worker/newsletter.ts` | the footer sign-up for a site's Tarvent audience with double opt-in, the notice that says to confirm (and to look in the spam folder), and one reminder for whoever hasn't confirmed a day later |
+| Newsletter | `…/components/NewsletterForm.astro`, `…/worker/newsletter.ts` | the footer sign-up for a site's Tarvent audience with double opt-in, the notice that says to confirm (and to look in the spam folder), one reminder for whoever hasn't confirmed a day later, and the deletion of sign-ups still unconfirmed after 30 days |
 | Languages | `…/components/LanguageMenu.astro`, `…/worker/language.ts` | opt-in: the header's language menu (a pick is kept in the `lang` cookie) and the Worker that sends each visitor to their language |
 | Sticky header | `…/components/StickyHeader.astro`, `…/lib/sticky-header.js` | the header element that stays at the top while the page scrolls, the scroll padding that keeps headings and focus below it, `--sticky-header-h` and `visibleTop()` for the site's other sticky bars and scrolling scripts |
 
@@ -443,13 +443,14 @@ becomes a build failure**, once the sites use the kit's proxy.
 
 **Every site's newsletter runs on these two parts** (Thomas, 2026-11-26), the
 way opensheetmusiceducation.org built it first (2026-11-17): a form in the
-footer, the site's own Worker, Tarvent's double opt-in, and one reminder for
-whoever doesn't confirm.
+footer, the site's own Worker, Tarvent's double opt-in, one reminder for
+whoever doesn't confirm, and after 30 days the deletion of a sign-up that was
+never confirmed (Thomas, 2026-11-26).
 
 | Part | Import | What it does |
 |---|---|---|
 | `NewsletterForm` | `…/components/NewsletterForm.astro` | one email field and a button; after the sign-up a notice in its place: confirm with the link in the mail, look in the spam folder |
-| `createNewsletter` | `…/worker/newsletter.ts` | `POST /api/newsletter` puts the address into the site's Tarvent audience; `doiReminder()` is the hourly confirm reminder |
+| `createNewsletter` | `…/worker/newsletter.ts` | `POST /api/newsletter` puts the address into the site's Tarvent audience; `newsletterCron()` is the hourly reminder and cleanup |
 
 What happens:
 
@@ -467,13 +468,19 @@ What happens:
    the mail and to look in the spam folder, and names the sender (Thomas,
    2026-11-26: that message has to stand out). Usermaven gets
    `newsletter_signup_sent` with the page's language.
-5. Once an hour `doiReminder()` looks for the sign-ups of one hour, 24 to 25
-   hours ago, that are still unconfirmed, and has Tarvent send them the same
-   confirm mail again (`resendDoiEmail`). Every sign-up falls into exactly
-   one hourly window, so nobody gets a second reminder. When all of them got
-   it, they get the tag `confirm reminder sent` in Tarvent, and every run
-   writes one `doi-reminder:` line to Workers Logs: the window, and the
-   contact ids with sent and failed counts, or "none unconfirmed".
+5. Once an hour `newsletterCron()` runs two steps. `doiReminder()` looks for
+   the sign-ups of one hour, 24 to 25 hours ago, that are still unconfirmed,
+   and has Tarvent send them the same confirm mail again (`resendDoiEmail`).
+   Every sign-up falls into exactly one hourly window, so nobody gets a
+   second reminder. When all of them got it, they get the tag `confirm
+   reminder sent` in Tarvent. Then `deleteUnconfirmed()` deletes the
+   sign-ups that are still unconfirmed 30 days later (`deleteContact`, one
+   id per call, at most 25 a run; the next hour goes on). Tarvent picks them
+   by status and age, and each one is checked again before it goes, so a
+   filter Tarvent ever ignored couldn't delete a subscriber. Each step writes
+   one line to Workers Logs per run: `doi-reminder:` with the window and the
+   contact ids with sent and failed counts, or "none unconfirmed", and
+   `doi-cleanup:` with the ids it deleted, or "none".
 
 The answers are JSON for the form's script: `{"ok":true}`, or `{"ok":false}`
 with an `error` (`invalid`, `rate`, `failed`, `origin`, `method`). An address
@@ -488,7 +495,7 @@ In the site:
 import { createNewsletter } from '@phonicscore/astro-kit/worker/newsletter.ts';
 import { locales } from '../src/i18n/locales';
 
-export const { isNewsletterPath, newsletter, doiReminder } = createNewsletter({ locales });
+export const { isNewsletterPath, newsletter, newsletterCron } = createNewsletter({ locales });
 ```
 
 ```ts
@@ -496,7 +503,7 @@ export const { isNewsletterPath, newsletter, doiReminder } = createNewsletter({ 
 if (isNewsletterPath(url.pathname)) return newsletter(request, env);
 
 // and in the Worker's scheduled handler:
-ctx.waitUntil(doiReminder(controller.scheduledTime, env));
+ctx.waitUntil(newsletterCron(controller.scheduledTime, env));
 ```
 
 ```jsonc
@@ -504,7 +511,7 @@ ctx.waitUntil(doiReminder(controller.scheduledTime, env));
 "vars": { "TARVENT_ACCOUNT_ID": "…", "TARVENT_AUDIENCE_ID": "…" },
 // Hourly, at any minute: a run stands for its full hour.
 "triggers": { "crons": ["5 * * * *"] },
-// The reminder's line per run, without a line per request.
+// The cron's two lines per run, without a line per request.
 "observability": { "enabled": true, "logs": { "invocation_logs": false } },
 // Optional: sign-ups per visitor address (IPv4, or the /64 of IPv6).
 "ratelimits": [{ "name": "NEWSLETTER_LIMIT", "namespace_id": "…", "simple": { "limit": 5, "period": 60 } }]
@@ -533,26 +540,33 @@ import NewsletterForm from '@phonicscore/astro-kit/components/NewsletterForm.ast
 - **The key.** `TARVENT_API_KEY` is a Worker secret (`npx wrangler secret put
   TARVENT_API_KEY`; locally `.dev.vars`). Each site's Worker gets its own key,
   made in the Tarvent app, because keys can't be made over the API and a
-  key's rights never change: that audience only, with the rights to create,
-  read and update contacts. Without the secret or the ids the form answers
-  "failed" and the reminder logs a line; nothing is sent.
+  key's rights never change: that audience only, with Audiences → View,
+  Contacts → Create, View, Update and Delete, and Tags → Create and View
+  (the reminder's tag). A new key starts with every right switched on:
+  switch all of them off first. Without the secret or the ids the form
+  answers "failed" and the cron logs a line; nothing is sent or deleted.
 - **The audience.** Double opt-in on, the confirm action "redirect to URL"
   with the site's confirmed page in English (`/newsletter/confirmed/`): the
   site's language Worker sends each visitor to their language. The confirmed
   page is the site's own, like every page: noindex, and out of the sitemap.
-- **The whole audience.** Tarvent's `resendDoiEmail` and `addContactTag`
-  without contact ids act on every contact of the audience. The kit only
-  calls them with the ids it found, never with an empty list
+- **The whole audience.** Tarvent's `resendDoiEmail`, `addContactTag` and
+  `bulkDeleteContact` without contact ids act on every contact of the
+  audience. The kit calls the first two only with the ids it found, never
+  with an empty list, and deletes with `deleteContact`, one id per call
   (`test/newsletter.test.mjs` holds it to that).
+- **Deleting.** `deleteUnconfirmedAfterDays` (default 30) sets when a
+  sign-up that was never confirmed goes; 0 keeps them. It has to come after
+  the reminder.
 - **Without JavaScript** the form posts as a plain form and the visitor sees
   the Worker's JSON answer: the sign-up works, the notice doesn't show.
 - **The privacy page** says it in the site's words: Tarvent Inc. keeps the
-  address for us, double opt-in, what each newsletter counts.
-- **Trying the reminder.** `DOI_REMINDER_DRY_RUN=1` in `.dev.vars` makes it log
-  the contact ids instead of sending; run `npx wrangler dev --test-scheduled`
-  and open `/__scheduled?cron=5+*+*+*+*`. Wrangler ignores a `time=` there, so
-  for a chosen hour call `doiReminder(time, env)` from a small script with
-  `node --experimental-strip-types`.
+  address for us, double opt-in, the one reminder, the deletion after 30
+  days, what each newsletter counts.
+- **Trying the cron.** `DOI_REMINDER_DRY_RUN=1` in `.dev.vars` makes it log
+  the contact ids instead of sending or deleting; run `npx wrangler dev
+  --test-scheduled` and open `/__scheduled?cron=5+*+*+*+*`. Wrangler ignores
+  a `time=` there, so for a chosen hour call `newsletterCron(time, env)` from
+  a small script with `node --experimental-strip-types`.
 
 ## Dark mode and languages
 
